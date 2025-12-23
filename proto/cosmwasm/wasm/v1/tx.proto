@@ -17,6 +17,8 @@ service Msg {
 
   // StoreCode to submit Wasm code to the system
   rpc StoreCode(MsgStoreCode) returns (MsgStoreCodeResponse);
+  // StoreCode to submit Wasm code to the system, along with an Halo2 Verifying Key
+  rpc StoreCodeWithVk(MsgStoreCodeWithVk) returns (MsgStoreCodeWithVkResponse);
   //  InstantiateContract creates a new smart contract instance for the given
   //  code id.
   rpc InstantiateContract(MsgInstantiateContract)
@@ -86,6 +88,23 @@ service Msg {
 }
 
 // MsgStoreCode submit Wasm code to the system
+message MsgStoreCodeWithVk {
+  option (amino.name) = "wasm/MsgStoreCodeWithVk";
+  option (cosmos.msg.v1.signer) = "sender";
+
+  // Sender is the actor that signed the messages
+  string sender = 1 [ (cosmos_proto.scalar) = "cosmos.AddressString" ];
+  // [0-cosmwasm,1-halo2-vk]
+  repeated bytes blobs = 2 [ (gogoproto.customname) = "WASMByteCode" ];
+  // Used in v1beta1
+  reserved 3, 4;
+  // InstantiatePermission access control to apply on contract creation,
+  // optional
+  AccessConfig instantiate_permission = 5;
+}
+
+
+// MsgStoreCode submit Wasm code to the system
 message MsgStoreCode {
   option (amino.name) = "wasm/MsgStoreCode";
   option (cosmos.msg.v1.signer) = "sender";
@@ -106,6 +125,14 @@ message MsgStoreCodeResponse {
   uint64 code_id = 1 [ (gogoproto.customname) = "CodeID" ];
   // Checksum is the sha256 hash of the stored code
   bytes checksum = 2;
+}
+// MsgStoreCodeResponse returns store result data.
+message MsgStoreCodeWithVkResponse {
+  // CodeID is the reference to the stored WASM code
+  uint64 code_id = 1 [ (gogoproto.customname) = "CodeID" ];
+  // Checksum is the sha256 hashes of the stored code & vk
+  // [0] - cosmwasm , [1] - vk
+  repeated bytes checksums = 2;
 }
 
 // MsgInstantiateContract create a new smart contract instance for the given

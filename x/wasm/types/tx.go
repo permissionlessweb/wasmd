@@ -59,6 +59,23 @@ func (msg MsgStoreCode) Type() string {
 	return "store-code"
 }
 
+func (msg MsgStoreCodeWithVk) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(msg.Sender); err != nil {
+		return err
+	}
+
+	if err := validateWasmCode(msg.WASMByteCode[0], MaxWasmSize); err != nil {
+		return errorsmod.Wrapf(sdkerrors.ErrInvalidRequest, "code bytes %s", err.Error())
+	}
+	//TODO: validate vk keys
+
+	if msg.InstantiatePermission != nil {
+		if err := msg.InstantiatePermission.ValidateBasic(); err != nil {
+			return errorsmod.Wrap(err, "instantiate permission")
+		}
+	}
+	return nil
+}
 func (msg MsgStoreCode) ValidateBasic() error {
 	if _, err := sdk.AccAddressFromBech32(msg.Sender); err != nil {
 		return err

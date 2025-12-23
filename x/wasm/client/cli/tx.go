@@ -61,6 +61,7 @@ func GetTxCmd() *cobra.Command {
 		SilenceUsage:               true,
 	}
 	txCmd.AddCommand(
+		StoreCodeWithVkCmd(),
 		StoreCodeCmd(),
 		InstantiateContractCmd(),
 		InstantiateContract2Cmd(),
@@ -74,6 +75,32 @@ func GetTxCmd() *cobra.Command {
 		UpdateContractLabelCmd(),
 	)
 	return txCmd
+}
+
+// StoreCodeWithVkCmd will upload code to be reused with a halo2 veriyfing key.
+func StoreCodeWithVkCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:     "store-with-vk [wasm file] [halo2-vk-file]",
+		Short:   "Upload a wasm binary & halo2-verifying-key binary",
+		Aliases: []string{"upload-with-vk", "headstash", "svk", "hs"},
+		Args:    cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			clientCtx, err := client.GetClientTxContext(cmd)
+			if err != nil {
+				return err
+			}
+			msg, err := parseStoreCodeWithVkArgs(args[0], args[1], clientCtx.GetFromAddress().String(), cmd.Flags())
+			if err != nil {
+				return err
+			}
+			return tx.GenerateOrBroadcastTxCLI(clientCtx, cmd.Flags(), &msg)
+		},
+		SilenceUsage: true,
+	}
+
+	addInstantiatePermissionFlags(cmd)
+	flags.AddTxFlagsToCmd(cmd)
+	return cmd
 }
 
 // StoreCodeCmd will upload code to be reused.
@@ -100,6 +127,49 @@ func StoreCodeCmd() *cobra.Command {
 	addInstantiatePermissionFlags(cmd)
 	flags.AddTxFlagsToCmd(cmd)
 	return cmd
+}
+
+// Prepares MsgStoreCode object from flags with gzipped wasm byte code field
+func parseStoreCodeWithVkArgs(wasmfile, vkfile, sender string, flags *flag.FlagSet) (types.MsgStoreCodeWithVk, error) {
+	wasm, err := os.ReadFile(wasmfile)
+	if err != nil {
+		return types.MsgStoreCodeWithVk{}, err
+	}
+	vk, err := os.ReadFile(vkfile)
+	if err != nil {
+		return types.MsgStoreCodeWithVk{}, err
+	}
+
+	// gzip the wasm file
+	if ioutils.IsWasm(wasm) {
+		wasm, err = ioutils.GzipIt(wasm)
+		if err != nil {
+			return types.MsgStoreCodeWithVk{}, err
+		}
+	} else if !ioutils.IsGzip(wasm) {
+		return types.MsgStoreCodeWithVk{}, errors.New("invalid input file. Use wasm binary or gzip")
+	}
+	// gzip the vk file
+	if ioutils.IsWasm(vk) {
+		vk, err = ioutils.GzipIt(vk)
+		if err != nil {
+			return types.MsgStoreCodeWithVk{}, err
+		}
+	} else if !ioutils.IsGzip(vk) {
+		return types.MsgStoreCodeWithVk{}, errors.New("invalid input file. Use wasm binary or gzip")
+	}
+
+	perm, err := parseAccessConfigFlags(flags)
+	if err != nil {
+		return types.MsgStoreCodeWithVk{}, err
+	}
+
+	msg := types.MsgStoreCodeWithVk{
+		Sender:                sender,
+		WASMByteCode:          [][]byte{wasm, vk},
+		InstantiatePermission: perm,
+	}
+	return msg, msg.ValidateBasic()
 }
 
 // Prepares MsgStoreCode object from flags with gzipped wasm byte code field

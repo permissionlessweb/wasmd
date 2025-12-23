@@ -113,6 +113,8 @@
     - [MsgStoreAndMigrateContractResponse](#cosmwasm.wasm.v1.MsgStoreAndMigrateContractResponse)
     - [MsgStoreCode](#cosmwasm.wasm.v1.MsgStoreCode)
     - [MsgStoreCodeResponse](#cosmwasm.wasm.v1.MsgStoreCodeResponse)
+    - [MsgStoreCodeWithVk](#cosmwasm.wasm.v1.MsgStoreCodeWithVk)
+    - [MsgStoreCodeWithVkResponse](#cosmwasm.wasm.v1.MsgStoreCodeWithVkResponse)
     - [MsgSudoContract](#cosmwasm.wasm.v1.MsgSudoContract)
     - [MsgSudoContractResponse](#cosmwasm.wasm.v1.MsgSudoContractResponse)
     - [MsgUnpinCodes](#cosmwasm.wasm.v1.MsgUnpinCodes)
@@ -1869,6 +1871,39 @@ MsgStoreCodeResponse returns store result data.
 
 
 
+<a name="cosmwasm.wasm.v1.MsgStoreCodeWithVk"></a>
+
+### MsgStoreCodeWithVk
+MsgStoreCode submit Wasm code to the system
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| `sender` | [string](#string) |  | Sender is the actor that signed the messages |
+| `blobs` | [bytes](#bytes) | repeated | [0-cosmwasm,1-halo2-vk] |
+| `instantiate_permission` | [AccessConfig](#cosmwasm.wasm.v1.AccessConfig) |  | InstantiatePermission access control to apply on contract creation, optional |
+
+
+
+
+
+
+<a name="cosmwasm.wasm.v1.MsgStoreCodeWithVkResponse"></a>
+
+### MsgStoreCodeWithVkResponse
+MsgStoreCodeResponse returns store result data.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| `code_id` | [uint64](#uint64) |  | CodeID is the reference to the stored WASM code |
+| `checksums` | [bytes](#bytes) | repeated | Checksum is the sha256 hashes of the stored code & vk [0] - cosmwasm , [1] - vk |
+
+
+
+
+
+
 <a name="cosmwasm.wasm.v1.MsgSudoContract"></a>
 
 ### MsgSudoContract
@@ -2065,6 +2100,7 @@ Msg defines the wasm Msg service.
 | Method Name | Request Type | Response Type | Description | HTTP Verb | Endpoint |
 | ----------- | ------------ | ------------- | ------------| ------- | -------- |
 | `StoreCode` | [MsgStoreCode](#cosmwasm.wasm.v1.MsgStoreCode) | [MsgStoreCodeResponse](#cosmwasm.wasm.v1.MsgStoreCodeResponse) | StoreCode to submit Wasm code to the system | |
+| `StoreCodeWithVk` | [MsgStoreCodeWithVk](#cosmwasm.wasm.v1.MsgStoreCodeWithVk) | [MsgStoreCodeWithVkResponse](#cosmwasm.wasm.v1.MsgStoreCodeWithVkResponse) | StoreCode to submit Wasm code to the system, along with an Halo2 Verifying Key | |
 | `InstantiateContract` | [MsgInstantiateContract](#cosmwasm.wasm.v1.MsgInstantiateContract) | [MsgInstantiateContractResponse](#cosmwasm.wasm.v1.MsgInstantiateContractResponse) | InstantiateContract creates a new smart contract instance for the given code id. | |
 | `InstantiateContract2` | [MsgInstantiateContract2](#cosmwasm.wasm.v1.MsgInstantiateContract2) | [MsgInstantiateContract2Response](#cosmwasm.wasm.v1.MsgInstantiateContract2Response) | InstantiateContract2 creates a new smart contract instance for the given code id with a predictable address | |
 | `ExecuteContract` | [MsgExecuteContract](#cosmwasm.wasm.v1.MsgExecuteContract) | [MsgExecuteContractResponse](#cosmwasm.wasm.v1.MsgExecuteContractResponse) | Execute submits the given message data to a smart contract | |

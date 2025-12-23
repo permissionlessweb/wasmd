@@ -23,6 +23,29 @@ func NewMsgServerImpl(k *Keeper) types.MsgServer {
 	return &msgServer{keeper: k}
 }
 
+// StoreCodeWithVk stores a new wasm code on chain
+func (m msgServer) StoreCodeWithVk(ctx context.Context, msg *types.MsgStoreCodeWithVk) (*types.MsgStoreCodeWithVkResponse, error) {
+	if err := msg.ValidateBasic(); err != nil {
+		return nil, err
+	}
+	senderAddr, err := sdk.AccAddressFromBech32(msg.Sender)
+	if err != nil {
+		return nil, errorsmod.Wrap(err, "sender")
+	}
+
+	policy := m.selectAuthorizationPolicy(ctx, msg.Sender)
+
+	codeID, checksum, err := m.keeper.create(ctx, senderAddr, msg.WASMByteCode[0], msg.InstantiatePermission, policy)
+	if err != nil {
+		return nil, err
+	}
+
+	return &types.MsgStoreCodeWithVkResponse{
+		CodeID:    codeID,
+		Checksums: [][]byte{checksum},
+	}, nil
+}
+
 // StoreCode stores a new wasm code on chain
 func (m msgServer) StoreCode(ctx context.Context, msg *types.MsgStoreCode) (*types.MsgStoreCodeResponse, error) {
 	if err := msg.ValidateBasic(); err != nil {
