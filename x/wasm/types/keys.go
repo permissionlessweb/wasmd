@@ -41,7 +41,7 @@ var (
 	CircuitsByCreatorPrefix   = []byte{0x18}
 	PinnedCircuitsIndexPrefix = []byte{0x07}
 
-	KeySequenceHalo2VkID  = append(SequenceKeyPrefix, []byte("lastPlonkishCircuit")...)
+	KeySequenceCircuitID  = append(SequenceKeyPrefix, []byte("lastPlonkishCircuit")...)
 	KeySequenceCodeID     = append(SequenceKeyPrefix, []byte("lastCodeId")...)
 	KeySequenceInstanceID = append(SequenceKeyPrefix, []byte("lastContractId")...)
 )

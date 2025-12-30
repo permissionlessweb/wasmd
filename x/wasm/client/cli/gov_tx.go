@@ -39,6 +39,8 @@ func SubmitProposalCmd() *cobra.Command {
 	}
 	cmd.AddCommand(
 		ProposalStoreCodeCmd(),
+		ProposalStoreCircuitCmd(),
+		ProposalStoreCodeWithCircuitCmd(),
 		ProposalInstantiateContractCmd(),
 		ProposalInstantiateContract2Cmd(),
 		ProposalStoreAndInstantiateContractCmd(),
@@ -48,10 +50,14 @@ func SubmitProposalCmd() *cobra.Command {
 		ProposalUpdateContractAdminCmd(),
 		ProposalClearContractAdminCmd(),
 		ProposalPinCodesCmd(),
+		ProposalPinCircuitsCmd(),
 		ProposalUnpinCodesCmd(),
+		ProposalUnpinCircuitsCmd(),
 		ProposalUpdateInstantiateConfigCmd(),
 		ProposalAddCodeUploadParamsAddresses(),
+		ProposalAddCircuitUploadParamsAddresses(),
 		ProposalRemoveCodeUploadParamsAddresses(),
+		ProposalRemoveCircuitUploadParamsAddresses(),
 		ProposalStoreAndMigrateContractCmd(),
 	)
 	return cmd
@@ -82,6 +88,86 @@ func ProposalStoreCodeCmd() *cobra.Command {
 			}
 
 			proposalMsg, err := v1.NewMsgSubmitProposal([]sdk.Msg{&storeCodeMsg}, deposit, clientCtx.GetFromAddress().String(), "", proposalTitle, summary, expedite)
+			if err != nil {
+				return err
+			}
+
+			return tx.GenerateOrBroadcastTxCLI(clientCtx, cmd.Flags(), proposalMsg)
+		},
+		SilenceUsage: true,
+	}
+	addInstantiatePermissionFlags(cmd)
+
+	// proposal flags
+	addCommonProposalFlags(cmd)
+	return cmd
+}
+
+func ProposalStoreCircuitCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "circuit-store [circuit binary file] --title [text] --summary [text] --authority [address]",
+		Short: "Submit a circuit binary proposal",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			clientCtx, proposalTitle, summary, deposit, expedite, err := getProposalInfo(cmd)
+			if err != nil {
+				return err
+			}
+			authority, err := cmd.Flags().GetString(flagAuthority)
+			if err != nil {
+				return fmt.Errorf("authority: %s", err)
+			}
+
+			if len(authority) == 0 {
+				return errors.New("authority address is required")
+			}
+
+			storeCircuitMsg, err := parseStoreCircuitArgs(args[0], authority, cmd.Flags())
+			if err != nil {
+				return err
+			}
+
+			proposalMsg, err := v1.NewMsgSubmitProposal([]sdk.Msg{&storeCircuitMsg}, deposit, clientCtx.GetFromAddress().String(), "", proposalTitle, summary, expedite)
+			if err != nil {
+				return err
+			}
+
+			return tx.GenerateOrBroadcastTxCLI(clientCtx, cmd.Flags(), proposalMsg)
+		},
+		SilenceUsage: true,
+	}
+	addInstantiatePermissionFlags(cmd)
+
+	// proposal flags
+	addCommonProposalFlags(cmd)
+	return cmd
+}
+
+func ProposalStoreCodeWithCircuitCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "wasm-store-with-circuit [wasm file] [circuit binary file] --title [text] --summary [text] --authority [address]",
+		Short: "Submit a wasm & circuit binary proposal",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			clientCtx, proposalTitle, summary, deposit, expedite, err := getProposalInfo(cmd)
+			if err != nil {
+				return err
+			}
+			authority, err := cmd.Flags().GetString(flagAuthority)
+			if err != nil {
+				return fmt.Errorf("authority: %s", err)
+			}
+
+			if len(authority) == 0 {
+				return errors.New("authority address is required")
+			}
+
+			storeWasmWithCircuitMsg, err := parseStoreCodeWithCircuitArgs(args[0], args[1], authority, cmd.Flags())
+			if err != nil {
+				return err
+			}
+
+			proposalMsg, err := v1.NewMsgSubmitProposal([]sdk.Msg{&storeWasmWithCircuitMsg}, deposit, clientCtx.GetFromAddress().String(), "", proposalTitle, summary, expedite)
 			if err != nil {
 				return err
 			}
@@ -650,6 +736,53 @@ func ProposalPinCodesCmd() *cobra.Command {
 	return cmd
 }
 
+func ProposalPinCircuitsCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "pin-circuits [circuit-ids] --title [text] --summary [text] --authority [address]",
+		Short: "Submit a pin circuit proposal for pinning a circuit to cache",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			clientCtx, proposalTitle, summary, deposit, expedite, err := getProposalInfo(cmd)
+			if err != nil {
+				return err
+			}
+
+			authority, err := cmd.Flags().GetString(flagAuthority)
+			if err != nil {
+				return fmt.Errorf("authority: %s", err)
+			}
+
+			if len(authority) == 0 {
+				return errors.New("authority address is required")
+			}
+
+			zkIds, err := parsePinCodesArgs(args)
+			if err != nil {
+				return err
+			}
+
+			msg := types.MsgPinCircuits{
+				Authority: authority,
+				ZkIDs:     zkIds,
+			}
+			if err = msg.ValidateBasic(); err != nil {
+				return err
+			}
+
+			proposalMsg, err := v1.NewMsgSubmitProposal([]sdk.Msg{&msg}, deposit, clientCtx.GetFromAddress().String(), "", proposalTitle, summary, expedite)
+			if err != nil {
+				return err
+			}
+
+			return tx.GenerateOrBroadcastTxCLI(clientCtx, cmd.Flags(), proposalMsg)
+		},
+		SilenceUsage: true,
+	}
+	// proposal flags
+	addCommonProposalFlags(cmd)
+	return cmd
+}
+
 func parsePinCodesArgs(args []string) ([]uint64, error) {
 	codeIDs := make([]uint64, len(args))
 	for i, c := range args {
@@ -689,6 +822,52 @@ func ProposalUnpinCodesCmd() *cobra.Command {
 			msg := types.MsgUnpinCodes{
 				Authority: authority,
 				CodeIDs:   codeIds,
+			}
+			if err = msg.ValidateBasic(); err != nil {
+				return err
+			}
+
+			proposalMsg, err := v1.NewMsgSubmitProposal([]sdk.Msg{&msg}, deposit, clientCtx.GetFromAddress().String(), "", proposalTitle, summary, expedite)
+			if err != nil {
+				return err
+			}
+
+			return tx.GenerateOrBroadcastTxCLI(clientCtx, cmd.Flags(), proposalMsg)
+		},
+		SilenceUsage: true,
+	}
+	// proposal flags
+	addCommonProposalFlags(cmd)
+	return cmd
+}
+
+func ProposalUnpinCircuitsCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "unpin-circuits [circuit-ids] --title [text] --summary [text] --authority [address]",
+		Short: "Submit an unpin circuit proposal for unpinning a circuit to cache",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			clientCtx, proposalTitle, summary, deposit, expedite, err := getProposalInfo(cmd)
+			if err != nil {
+				return err
+			}
+			authority, err := cmd.Flags().GetString(flagAuthority)
+			if err != nil {
+				return fmt.Errorf("authority: %s", err)
+			}
+
+			if len(authority) == 0 {
+				return errors.New("authority address is required")
+			}
+
+			zkIds, err := parsePinCodesArgs(args)
+			if err != nil {
+				return err
+			}
+
+			msg := types.MsgUnpinCircuits{
+				Authority: authority,
+				ZkIDs:     zkIds,
 			}
 			if err = msg.ValidateBasic(); err != nil {
 				return err
@@ -860,6 +1039,45 @@ func ProposalAddCodeUploadParamsAddresses() *cobra.Command {
 	return cmd
 }
 
+func ProposalAddCircuitUploadParamsAddresses() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "add-circuit-upload-params-addresses [addresses] --title [text] --summary [text] --authority [address]",
+		Short: "Submit an add circuit upload params addresses proposal to add addresses to circuit upload config params",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			clientCtx, proposalTitle, summary, deposit, expedite, err := getProposalInfo(cmd)
+			if err != nil {
+				return err
+			}
+
+			authority, err := cmd.Flags().GetString(flagAuthority)
+			if err != nil {
+				return fmt.Errorf("authority: %s", err)
+			}
+
+			if len(authority) == 0 {
+				return errors.New("authority address is required")
+			}
+
+			msg := types.MsgAddCircuitUploadParamsAddresses{
+				Authority: authority,
+				Addresses: args,
+			}
+
+			proposalMsg, err := v1.NewMsgSubmitProposal([]sdk.Msg{&msg}, deposit, clientCtx.GetFromAddress().String(), "", proposalTitle, summary, expedite)
+			if err != nil {
+				return err
+			}
+
+			return tx.GenerateOrBroadcastTxCLI(clientCtx, cmd.Flags(), proposalMsg)
+		},
+		SilenceUsage: true,
+	}
+	// proposal flags
+	addCommonProposalFlags(cmd)
+	return cmd
+}
+
 func ProposalRemoveCodeUploadParamsAddresses() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "remove-code-upload-params-addresses [addresses] --title [text] --summary [text] --authority [address]",
@@ -881,6 +1099,45 @@ func ProposalRemoveCodeUploadParamsAddresses() *cobra.Command {
 			}
 
 			msg := types.MsgRemoveCodeUploadParamsAddresses{
+				Authority: authority,
+				Addresses: args,
+			}
+
+			proposalMsg, err := v1.NewMsgSubmitProposal([]sdk.Msg{&msg}, deposit, clientCtx.GetFromAddress().String(), "", proposalTitle, summary, expedite)
+			if err != nil {
+				return err
+			}
+
+			return tx.GenerateOrBroadcastTxCLI(clientCtx, cmd.Flags(), proposalMsg)
+		},
+		SilenceUsage: true,
+	}
+	// proposal flags
+	addCommonProposalFlags(cmd)
+	return cmd
+}
+
+func ProposalRemoveCircuitUploadParamsAddresses() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "remove-code-upload-params-addresses [addresses] --title [text] --summary [text] --authority [address]",
+		Short: "Submit a remove circuit upload params addresses proposal to remove addresses from circuit upload config params",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			clientCtx, proposalTitle, summary, deposit, expedite, err := getProposalInfo(cmd)
+			if err != nil {
+				return err
+			}
+
+			authority, err := cmd.Flags().GetString(flagAuthority)
+			if err != nil {
+				return fmt.Errorf("authority: %s", err)
+			}
+
+			if len(authority) == 0 {
+				return errors.New("authority address is required")
+			}
+
+			msg := types.MsgRemoveCircuitUploadParamsAddresses{
 				Authority: authority,
 				Addresses: args,
 			}

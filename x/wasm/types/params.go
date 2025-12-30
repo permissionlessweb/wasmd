@@ -104,6 +104,9 @@ func (p Params) ValidateBasic() error {
 	if err := validateAccessType(p.InstantiateDefaultPermission); err != nil {
 		return errorsmod.Wrap(err, "instantiate default permission")
 	}
+	if err := p.CircuitUploadAccess.ValidateBasic(); err != nil {
+		return errors.Wrap(err, "circuit upload access")
+	}
 	if err := p.CodeUploadAccess.ValidateBasic(); err != nil {
 		return errors.Wrap(err, "upload access")
 	}

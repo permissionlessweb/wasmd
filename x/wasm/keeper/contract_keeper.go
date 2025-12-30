@@ -30,7 +30,9 @@ type decoratedKeeper interface {
 	migrate(ctx context.Context, contractAddress, caller sdk.AccAddress, newCodeID uint64, msg []byte, authZ types.AuthorizationPolicy) ([]byte, error)
 	setContractAdmin(ctx context.Context, contractAddress, caller, newAdmin sdk.AccAddress, authZ types.AuthorizationPolicy) error
 	pinCode(ctx context.Context, codeID uint64) error
+	pinCircuit(ctx context.Context, zkID uint64) error
 	unpinCode(ctx context.Context, codeID uint64) error
+	unpinCircuit(ctx context.Context, zkID uint64) error
 	execute(ctx context.Context, contractAddress, caller sdk.AccAddress, msg []byte, coins sdk.Coins) ([]byte, error)
 	Sudo(ctx context.Context, contractAddress sdk.AccAddress, msg []byte) ([]byte, error)
 	setContractInfoExtension(ctx context.Context, contract sdk.AccAddress, extra types.ContractInfoExtension) error
@@ -116,6 +118,9 @@ func (p PermissionedKeeper) ClearContractAdmin(ctx sdk.Context, contractAddress,
 }
 
 func (p PermissionedKeeper) PinCode(ctx sdk.Context, codeID uint64) error {
+	return p.nested.pinCode(ctx, codeID)
+}
+func (p PermissionedKeeper) PinCircuit(ctx sdk.Context, codeID uint64) error {
 	return p.nested.pinCode(ctx, codeID)
 }
 

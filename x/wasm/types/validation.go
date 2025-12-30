@@ -41,7 +41,8 @@ func validateWasmCode(s []byte, maxSize int) error {
 	}
 	return nil
 }
-func validateCircuit(s []byte, maxSize int) error {
+
+func validateCircuitCode(s []byte, maxSize int) error {
 	if len(s) == 0 {
 		return errorsmod.Wrap(ErrEmpty, "is required")
 	}

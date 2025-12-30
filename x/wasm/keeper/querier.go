@@ -256,6 +256,25 @@ func (q GrpcQuerier) Code(c context.Context, req *types.QueryCodeRequest) (*type
 		Data:             rsp.Data,
 	}, nil
 }
+func (q GrpcQuerier) Circuit(c context.Context, req *types.QueryCircuitRequest) (*types.QueryCircuitResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "empty request")
+	}
+	if req.ZkId == 0 {
+		return nil, errorsmod.Wrap(types.ErrInvalid, "zk id")
+	}
+	rsp, err := queryCircuit(sdk.UnwrapSDKContext(c), req.ZkId, q.keeper)
+	switch {
+	case err != nil:
+		return nil, err
+	case rsp == nil:
+		return nil, types.ErrNoSuchCodeFn(req.ZkId).Wrapf("zk id %d", req.ZkId)
+	}
+	return &types.QueryCircuitResponse{
+		CircuitInfoResponse: rsp.CircuitInfoResponse,
+		Data:                rsp.Data,
+	}, nil
+}
 
 func (q GrpcQuerier) Codes(c context.Context, req *types.QueryCodesRequest) (*types.QueryCodesResponse, error) {
 	if req == nil {
@@ -308,6 +327,24 @@ func (q GrpcQuerier) CodeInfo(c context.Context, req *types.QueryCodeInfoRequest
 		InstantiatePermission: info.InstantiatePermission,
 	}, nil
 }
+func (q GrpcQuerier) CircuitInfo(c context.Context, req *types.QueryCircuitInfoRequest) (*types.QueryCircuitInfoResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "empty request")
+	}
+	if req.ZkId == 0 {
+		return nil, errorsmod.Wrap(types.ErrInvalid, "zk id")
+	}
+	info := queryCircuitInfo(sdk.UnwrapSDKContext(c), req.ZkId, q.keeper)
+	if info == nil {
+		return nil, types.ErrNoSuchCodeFn(req.ZkId).Wrapf("code id %d", req.ZkId)
+	}
+	return &types.QueryCircuitInfoResponse{
+		ZkID:                  info.ZkID,
+		Creator:               info.Creator,
+		Checksum:              info.DataHash,
+		InstantiatePermission: info.InstantiatePermission,
+	}, nil
+}
 
 func queryContractInfo(ctx sdk.Context, addr sdk.AccAddress, keeper types.ViewKeeper) (*types.QueryContractInfoResponse, error) {
 	info := keeper.GetContractInfo(ctx, addr)
@@ -352,8 +389,9 @@ func queryCodeInfo(ctx sdk.Context, codeID uint64, keeper types.ViewKeeper) *typ
 	}
 	return &info
 }
-func queryCircuit(ctx sdk.Context, zkID uint64, keeper types.ViewKeeper) (*types.QueryCodeResponse, error) {
-	info := queryCodeInfo(ctx, zkID, keeper)
+
+func queryCircuit(ctx sdk.Context, zkID uint64, keeper types.ViewKeeper) (*types.QueryCircuitResponse, error) {
+	info := queryCircuitInfo(ctx, zkID, keeper)
 	if info == nil {
 		// nil, nil leads to 404 in rest handler
 		return nil, nil
@@ -364,10 +402,10 @@ func queryCircuit(ctx sdk.Context, zkID uint64, keeper types.ViewKeeper) (*types
 		return nil, errorsmod.Wrap(err, "loading wasm code")
 	}
 
-	return &types.QueryCodeResponse{CodeInfoResponse: info, Data: code}, nil
+	return &types.QueryCircuitResponse{CircuitInfoResponse: info, Data: code}, nil
 }
 
-func queryCircuitInfo(ctx sdk.Context, zkID uint64, keeper types.ViewKeeper) *types.CodeInfoResponse {
+func queryCircuitInfo(ctx sdk.Context, zkID uint64, keeper types.ViewKeeper) *types.CircuitInfoResponse {
 	if zkID == 0 {
 		return nil
 	}
@@ -375,8 +413,8 @@ func queryCircuitInfo(ctx sdk.Context, zkID uint64, keeper types.ViewKeeper) *ty
 	if res == nil {
 		return nil
 	}
-	info := types.CodeInfoResponse{
-		CodeID:                zkID,
+	info := types.CircuitInfoResponse{
+		ZkID:                  zkID,
 		Creator:               res.Creator,
 		DataHash:              res.CircuitHash,
 		InstantiatePermission: res.InstantiateConfig,
@@ -412,7 +450,7 @@ func (q GrpcQuerier) PinnedCodes(c context.Context, req *types.QueryPinnedCodesR
 	}, nil
 }
 
-func (q GrpcQuerier) PinnedCircuits(c context.Context, req *types.QueryPinnedCodesRequest) (*types.QueryPinnedCodesResponse, error) {
+func (q GrpcQuerier) PinnedCircuits(c context.Context, req *types.QueryPinnedCircuitsRequest) (*types.QueryPinnedCircuitsResponse, error) {
 	if req == nil {
 		return nil, status.Error(codes.InvalidArgument, "empty request")
 	}
@@ -434,8 +472,8 @@ func (q GrpcQuerier) PinnedCircuits(c context.Context, req *types.QueryPinnedCod
 	if err != nil {
 		return nil, err
 	}
-	return &types.QueryPinnedCodesResponse{
-		CodeIDs:    r,
+	return &types.QueryPinnedCircuitsResponse{
+		ZkIDs:      r,
 		Pagination: pageRes,
 	}, nil
 }

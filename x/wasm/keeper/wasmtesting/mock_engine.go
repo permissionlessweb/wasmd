@@ -274,6 +274,7 @@ func (m *MockWasmEngine) Unpin(checksum wasmvm.Checksum) error {
 	}
 	return m.UnpinFn(checksum)
 }
+
 func (m *MockWasmEngine) UnpinCircuit(checksum wasmvm.Checksum) error {
 	if m.UnpinCircuitFn == nil {
 		panic("not supposed to be called!")

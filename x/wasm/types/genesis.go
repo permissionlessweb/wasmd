@@ -23,6 +23,11 @@ func (s GenesisState) ValidateBasic() error {
 			return errorsmod.Wrapf(err, "code: %d", i)
 		}
 	}
+	for i := range s.Circuits {
+		if err := s.Circuits[i].ValidateBasic(); err != nil {
+			return errorsmod.Wrapf(err, "code: %d", i)
+		}
+	}
 	for i := range s.Contracts {
 		if err := s.Contracts[i].ValidateBasic(); err != nil {
 			return errorsmod.Wrapf(err, "contract: %d", i)
@@ -46,6 +51,19 @@ func (c Code) ValidateBasic() error {
 	}
 	if err := validateWasmCode(c.CodeBytes, MaxProposalWasmSize); err != nil {
 		return errorsmod.Wrap(err, "code bytes")
+	}
+	return nil
+}
+
+func (c Circuit) ValidateBasic() error {
+	if c.ZkID == 0 {
+		return errorsmod.Wrap(ErrEmpty, "zk id")
+	}
+	if err := c.ZkInfo.ValidateBasic(); err != nil {
+		return errorsmod.Wrap(err, "zk info")
+	}
+	if err := validateCircuitCode(c.ZkBytes, MaxProposalWasmSize); err != nil {
+		return errorsmod.Wrap(err, "zk bytes")
 	}
 	return nil
 }

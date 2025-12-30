@@ -68,7 +68,7 @@ func (msg MsgStoreCircuit) ValidateBasic() error {
 		return err
 	}
 
-	if err := validateCircuit(msg.CircuitBinaryFile, MaxWasmSize); err != nil {
+	if err := validateCircuitCode(msg.CircuitBinaryFile, MaxWasmSize); err != nil {
 		return errorsmod.Wrapf(sdkerrors.ErrInvalidRequest, "circuit bytes %s", err.Error())
 	}
 	return nil
@@ -82,7 +82,7 @@ func (msg MsgStoreCodeWithVk) ValidateBasic() error {
 	if err := validateWasmCode(msg.WASMByteCode, MaxWasmSize); err != nil {
 		return errorsmod.Wrapf(sdkerrors.ErrInvalidRequest, "code bytes %s", err.Error())
 	}
-	//TODO: validate vk keys
+	// TODO: validate vk keys
 
 	if msg.InstantiatePermission != nil {
 		if err := msg.InstantiatePermission.ValidateBasic(); err != nil {
@@ -91,6 +91,7 @@ func (msg MsgStoreCodeWithVk) ValidateBasic() error {
 	}
 	return nil
 }
+
 func (msg MsgStoreCode) ValidateBasic() error {
 	if _, err := sdk.AccAddressFromBech32(msg.Sender); err != nil {
 		return err
@@ -405,6 +406,21 @@ func validateCodeIDs(codeIDs []uint64) error {
 	return nil
 }
 
+func (msg MsgPinCircuits) Route() string {
+	return RouterKey
+}
+
+func (msg MsgPinCircuits) Type() string {
+	return "pin-codes"
+}
+
+func (msg MsgPinCircuits) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(msg.Authority); err != nil {
+		return errorsmod.Wrap(err, "authority")
+	}
+	return validateCodeIDs(msg.ZkIDs)
+}
+
 func (msg MsgUnpinCodes) Route() string {
 	return RouterKey
 }
@@ -419,6 +435,7 @@ func (msg MsgUnpinCodes) ValidateBasic() error {
 	}
 	return validateCodeIDs(msg.CodeIDs)
 }
+
 func (msg MsgUnpinCircuits) Route() string {
 	return RouterKey
 }
@@ -517,6 +534,7 @@ func (msg MsgAddCodeUploadParamsAddresses) ValidateBasic() error {
 
 	return validateBech32Addresses(msg.Addresses)
 }
+
 func (msg MsgRemoveCircuitUploadParamsAddresses) Route() string {
 	return RouterKey
 }

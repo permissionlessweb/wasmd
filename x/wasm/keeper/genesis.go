@@ -43,6 +43,22 @@ func InitGenesis(ctx sdk.Context, keeper *Keeper, data types.GenesisState) ([]ab
 		}
 	}
 
+	var maxCircuitID uint64
+	for i, code := range data.Circuits {
+		err := keeper.importCode(ctx, code.ZkID, code.ZkInfo, code.ZkBytes)
+		if err != nil {
+			return nil, errorsmod.Wrapf(err, "circuit %d with idzk-: %d", i, code.ZkID)
+		}
+		if code.ZkID > maxCircuitID {
+			maxCircuitID = code.ZkID
+		}
+		if code.Pinned {
+			if err := contractKeeper.PinCircuit(ctx, code.ZkID); err != nil {
+				return nil, errorsmod.Wrapf(err, "contract number %d", i)
+			}
+		}
+	}
+
 	for i, contract := range data.Contracts {
 		contractAddr, err := sdk.AccAddressFromBech32(contract.ContractAddress)
 		if err != nil {
@@ -69,6 +85,16 @@ func InitGenesis(ctx sdk.Context, keeper *Keeper, data types.GenesisState) ([]ab
 	if seqVal <= maxCodeID {
 		return nil, errorsmod.Wrapf(types.ErrInvalid, "seq %s with value: %d must be greater than: %d ", string(types.KeySequenceCodeID), seqVal, maxCodeID)
 	}
+
+	// sanity check seq values
+	circuitSeqVal, err := keeper.PeekAutoIncrementID(ctx, types.KeySequenceCircuitID)
+	if err != nil {
+		return nil, err
+	}
+	if circuitSeqVal <= maxCircuitID {
+		return nil, errorsmod.Wrapf(types.ErrInvalid, "circuitSeqVal %s with value: %d must be greater than: %d ", string(types.KeySequenceCircuitID), seqVal, maxCodeID)
+	}
+
 	// ensure next classic address is unused so that we know the sequence is good
 	rCtx, _ := ctx.CacheContext()
 	seqVal, err = keeper.PeekAutoIncrementID(rCtx, types.KeySequenceInstanceID)

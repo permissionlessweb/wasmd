@@ -27,6 +27,21 @@ message GenesisState {
     (amino.dont_omitempty) = true,
     (gogoproto.jsontag) = "sequences,omitempty"
   ];
+  repeated Circuit circuits = 5 [
+    (gogoproto.nullable) = false,
+    (amino.dont_omitempty) = true,
+    (gogoproto.jsontag) = "circuits,omitempty"
+  ];
+}
+
+// Circuit struct encompasses CodeInfo and CircuitBinary
+message Circuit {
+  uint64 zk_id = 1 [ (gogoproto.customname) = "ZkID" ];
+  CodeInfo zk_info = 2
+      [ (gogoproto.nullable) = false, (amino.dont_omitempty) = true ];
+  bytes zk_bytes = 3;
+  // Pinned to wasmvm cache
+  bool pinned = 4;
 }
 
 // Code struct encompasses CodeInfo and CodeBytes

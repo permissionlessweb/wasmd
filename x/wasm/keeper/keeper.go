@@ -155,7 +155,6 @@ func (k Keeper) GetGasRegister() types.GasRegister {
 }
 
 func (k Keeper) create_with_circuit(ctx context.Context, creator sdk.AccAddress, wasmCode, vkCode []byte, instantiateAccess *types.AccessConfig, authZ types.AuthorizationPolicy) (codeID uint64, checksums [][]byte, err error) {
-
 	if creator == nil {
 		return 0, checksums, errorsmod.Wrap(sdkerrors.ErrInvalidAddress, "cannot be nil")
 	}
@@ -189,7 +188,6 @@ func (k Keeper) create_with_circuit(ctx context.Context, creator sdk.AccAddress,
 	if isSimulation {
 		// only simulate storing the code, no files are written
 		vmChecksums, gasUsed, err = k.wasmVM.SimulateStoreCodeWithCircuit(wasmCode, vkCode, gasLeft)
-
 	} else {
 		vmChecksums, gasUsed, err = k.wasmVM.StoreCodeWithCircuit(wasmCode, vkCode, gasLeft)
 	}
@@ -215,7 +213,7 @@ func (k Keeper) create_with_circuit(ctx context.Context, creator sdk.AccAddress,
 		requiredCapabilities = report.RequiredCapabilities
 	}
 	codeID = k.mustAutoIncrementID(sdkCtx, types.KeySequenceCodeID)
-	zkID := k.mustAutoIncrementID(sdkCtx, types.KeySequenceHalo2VkID)
+	zkID := k.mustAutoIncrementID(sdkCtx, types.KeySequenceCircuitID)
 	k.Logger(sdkCtx).Debug("storing new contract with vk", "capabilities", requiredCapabilities, "code_id", codeID, "zk_id", zkID)
 	codeInfo := types.NewCodeInfo(checksums[0], creator, *instantiateAccess)
 	vkInfo := types.NewCircuitInfo(checksums[1], creator, *instantiateAccess)
@@ -1406,6 +1404,30 @@ func (k Keeper) pinCode(ctx context.Context, codeID uint64) error {
 	sdk.UnwrapSDKContext(ctx).EventManager().EmitEvent(sdk.NewEvent(
 		types.EventTypePinCode,
 		sdk.NewAttribute(types.AttributeKeyCodeID, strconv.FormatUint(codeID, 10)),
+	))
+	return nil
+}
+
+// PinCode pins the wasm contract in wasmvm cache
+func (k Keeper) pinCircuit(ctx context.Context, zkID uint64) error {
+	zkInfo := k.GetCircuitInfo(ctx, zkID)
+	if zkInfo == nil {
+		return types.ErrNoSuchCodeFn(zkID).Wrapf("zk id %d", zkID)
+	}
+
+	if err := k.wasmVM.Pin(zkInfo.CircuitHash); err != nil {
+		return errorsmod.Wrap(types.ErrPinCircuitFailed, err.Error())
+	}
+	store := k.storeService.OpenKVStore(ctx)
+	// store 1 byte to not run into `nil` debugging issues
+	err := store.Set(types.GetPinnedCircuitIndexPrefix(zkID), []byte{1})
+	if err != nil {
+		return err
+	}
+
+	sdk.UnwrapSDKContext(ctx).EventManager().EmitEvent(sdk.NewEvent(
+		types.EventTypePinCircuit,
+		sdk.NewAttribute(types.AttributeKeyZkID, strconv.FormatUint(zkID, 10)),
 	))
 	return nil
 }

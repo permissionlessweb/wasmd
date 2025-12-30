@@ -58,6 +58,11 @@ service Query {
     option (cosmos.query.v1.module_query_safe) = true;
     option (google.api.http).get = "/cosmwasm/wasm/v1/code/{code_id}";
   }
+  // Circuit gets the binary vk and metadata footer binary for a single circuit
+  rpc Circuit(QueryCircuitRequest) returns (QueryCircuitResponse) {
+    option (cosmos.query.v1.module_query_safe) = true;
+    option (google.api.http).get = "/cosmwasm/wasm/v1/circuit/{zk_id}";
+  }
   // Codes gets the metadata for all stored wasm codes
   rpc Codes(QueryCodesRequest) returns (QueryCodesResponse) {
     option (cosmos.query.v1.module_query_safe) = true;
@@ -70,10 +75,22 @@ service Query {
     option (google.api.http).get = "/cosmwasm/wasm/v1/code-info/{code_id}";
   }
 
+  // CircuitInfo gets the circuit meta data
+  rpc CircuitInfo(QueryCircuitInfoRequest) returns (QueryCircuitInfoResponse) {
+    option (cosmos.query.v1.module_query_safe) = true;
+    option (google.api.http).get = "/cosmwasm/wasm/v1/circuit-info/{zk_id}";
+  }
+
   // PinnedCodes gets the pinned code ids
   rpc PinnedCodes(QueryPinnedCodesRequest) returns (QueryPinnedCodesResponse) {
     option (cosmos.query.v1.module_query_safe) = true;
     option (google.api.http).get = "/cosmwasm/wasm/v1/codes/pinned";
+  }
+  // PinnedCircuits gets the pinned code ids
+  rpc PinnedCircuits(QueryPinnedCircuitsRequest)
+      returns (QueryPinnedCircuitsResponse) {
+    option (cosmos.query.v1.module_query_safe) = true;
+    option (google.api.http).get = "/cosmwasm/wasm/v1/circuits/pinned";
   }
 
   // Params gets the module params
@@ -223,6 +240,27 @@ message QueryCodeRequest {
   uint64 code_id = 1; // grpc-gateway_out does not support Go style CodeID
 }
 
+// QueryCodeResponse is the response type for the Query/Code RPC method
+message QueryCodeResponse {
+  option (gogoproto.equal) = true;
+  CodeInfoResponse code_info = 1
+      [ (gogoproto.embed) = true, (gogoproto.jsontag) = "" ];
+  bytes data = 2 [ (gogoproto.jsontag) = "data" ];
+}
+
+// QueryCircuitRequest is the request type for the Query/Circuit RPC method
+message QueryCircuitRequest {
+  uint64 zk_id = 1; // grpc-gateway_out does not support Go style ZkID
+}
+
+// QueryCircuitResponse is the response type for the Query/Code RPC method
+message QueryCircuitResponse {
+  option (gogoproto.equal) = true;
+  CircuitInfoResponse circuit_info = 1
+      [ (gogoproto.embed) = true, (gogoproto.jsontag) = "" ];
+  bytes data = 2 [ (gogoproto.jsontag) = "data" ];
+}
+
 // QueryCodeInfoRequest is the request type for the Query/CodeInfo RPC method
 message QueryCodeInfoRequest {
   uint64 code_id = 1; // grpc-gateway_out does not support Go style CodeID
@@ -258,12 +296,41 @@ message CodeInfoResponse {
       [ (gogoproto.nullable) = false, (amino.dont_omitempty) = true ];
 }
 
-// QueryCodeResponse is the response type for the Query/Code RPC method
-message QueryCodeResponse {
+// QueryCircuitInfoRequest is the request type for the Query/CircuitINfo RPC
+// method
+message QueryCircuitInfoRequest {
+  uint64 zk_id = 1; // grpc-gateway_out does not support Go style ZkID
+}
+
+// QueryCircuitInfoResponse is the response type for the Query/CircuitInfo RPC
+// method
+message QueryCircuitInfoResponse {
   option (gogoproto.equal) = true;
-  CodeInfoResponse code_info = 1
-      [ (gogoproto.embed) = true, (gogoproto.jsontag) = "" ];
-  bytes data = 2 [ (gogoproto.jsontag) = "data" ];
+
+  uint64 zk_id = 1 [ (gogoproto.customname) = "ZkID" ];
+  string creator = 2 [ (cosmos_proto.scalar) = "cosmos.AddressString" ];
+  bytes checksum = 3 [ (gogoproto.casttype) =
+                           "github.com/cometbft/cometbft/libs/bytes.HexBytes" ];
+  AccessConfig instantiate_permission = 4
+      [ (gogoproto.nullable) = false, (amino.dont_omitempty) = true ];
+}
+
+// CodeInfoResponse contains code meta data from CodeInfo
+message CircuitInfoResponse {
+  option (gogoproto.equal) = true;
+
+  uint64 zk_id = 1 [
+    (gogoproto.customname) = "ZkID",
+    (gogoproto.jsontag) = "id"
+  ]; // id for legacy support
+  string creator = 2 [ (cosmos_proto.scalar) = "cosmos.AddressString" ];
+  bytes data_hash = 3
+      [ (gogoproto.casttype) =
+            "github.com/cometbft/cometbft/libs/bytes.HexBytes" ];
+  // Used in v1beta1
+  reserved 4, 5;
+  AccessConfig instantiate_permission = 6
+      [ (gogoproto.nullable) = false, (amino.dont_omitempty) = true ];
 }
 
 // QueryCodesRequest is the request type for the Query/Codes RPC method
@@ -291,6 +358,21 @@ message QueryPinnedCodesRequest {
 // Query/PinnedCodes RPC method
 message QueryPinnedCodesResponse {
   repeated uint64 code_ids = 1 [ (gogoproto.customname) = "CodeIDs" ];
+  // pagination defines the pagination in the response.
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+// QueryPinnedCircuitsRequest is the request type for the Query/PinnedCircuits
+// RPC method
+message QueryPinnedCircuitsRequest {
+  // pagination defines an optional pagination for the request.
+  cosmos.base.query.v1beta1.PageRequest pagination = 2;
+}
+
+// QueryPinnedCircuitsResponse is the response type for the
+// Query/PinnedCircuits RPC method
+message QueryPinnedCircuitsResponse {
+  repeated uint64 zk_ids = 1 [ (gogoproto.customname) = "ZkIDs" ];
   // pagination defines the pagination in the response.
   cosmos.base.query.v1beta1.PageResponse pagination = 2;
 }

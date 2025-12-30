@@ -93,8 +93,10 @@ var (
 	// ErrExceedMaxCallDepth error if max message stack size is exceeded
 	ErrExceedMaxCallDepth = errorsmod.Register(DefaultCodespace, 30, "max call depth exceeded")
 
-	// ErrUnpinContractFailed error for unpinning contract failures
+	// ErrUnpinContractFailed error for unpinning circuit failures
 	ErrUnpinCircuitFailed = errorsmod.Register(DefaultCodespace, 31, "unpinning circuit failed")
+	// ErrPinCircuitFailed error for pinning circuit failures
+	ErrPinCircuitFailed = errorsmod.Register(DefaultCodespace, 32, "unpinning circuit failed")
 )
 
 // WasmVMErrorable mapped error type in wasmvm and are not redacted

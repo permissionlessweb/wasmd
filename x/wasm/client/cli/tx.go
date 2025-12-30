@@ -62,6 +62,7 @@ func GetTxCmd() *cobra.Command {
 	}
 	txCmd.AddCommand(
 		StoreCodeWithVkCmd(),
+		StoreCircuitCmd(),
 		StoreCodeCmd(),
 		InstantiateContractCmd(),
 		InstantiateContract2Cmd(),
@@ -89,7 +90,33 @@ func StoreCodeWithVkCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			msg, err := parseStoreCodeWithVkArgs(args[0], args[1], clientCtx.GetFromAddress().String(), cmd.Flags())
+			msg, err := parseStoreCodeWithCircuitArgs(args[0], args[1], clientCtx.GetFromAddress().String(), cmd.Flags())
+			if err != nil {
+				return err
+			}
+			return tx.GenerateOrBroadcastTxCLI(clientCtx, cmd.Flags(), &msg)
+		},
+		SilenceUsage: true,
+	}
+
+	addInstantiatePermissionFlags(cmd)
+	flags.AddTxFlagsToCmd(cmd)
+	return cmd
+}
+
+// StoreCodeCmd will upload code to be reused.
+func StoreCircuitCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:     "store-circuit [circuit binary file]",
+		Short:   "Upload a zk-circuit binary",
+		Aliases: []string{"upload-circuit", "circuit", "uc"},
+		Args:    cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			clientCtx, err := client.GetClientTxContext(cmd)
+			if err != nil {
+				return err
+			}
+			msg, err := parseStoreCircuitArgs(args[0], clientCtx.GetFromAddress().String(), cmd.Flags())
 			if err != nil {
 				return err
 			}
@@ -130,7 +157,7 @@ func StoreCodeCmd() *cobra.Command {
 }
 
 // Prepares MsgStoreCode object from flags with gzipped wasm byte code field
-func parseStoreCodeWithVkArgs(wasmfile, vkfile, sender string, flags *flag.FlagSet) (types.MsgStoreCodeWithVk, error) {
+func parseStoreCodeWithCircuitArgs(wasmfile, vkfile, sender string, flags *flag.FlagSet) (types.MsgStoreCodeWithVk, error) {
 	wasm, err := os.ReadFile(wasmfile)
 	if err != nil {
 		return types.MsgStoreCodeWithVk{}, err
@@ -198,6 +225,36 @@ func parseStoreCodeArgs(file, sender string, flags *flag.FlagSet) (types.MsgStor
 	msg := types.MsgStoreCode{
 		Sender:                sender,
 		WASMByteCode:          wasm,
+		InstantiatePermission: perm,
+	}
+	return msg, msg.ValidateBasic()
+}
+
+// Prepares MsgStoreCode object from flags with gzipped wasm byte code field
+func parseStoreCircuitArgs(file, sender string, flags *flag.FlagSet) (types.MsgStoreCircuit, error) {
+	wasm, err := os.ReadFile(file)
+	if err != nil {
+		return types.MsgStoreCircuit{}, err
+	}
+
+	// // gzip the wasm file
+	// if ioutils.IsWasm(wasm) {
+	// 	wasm, err = ioutils.GzipIt(wasm)
+	// 	if err != nil {
+	// 		return types.MsgStoreCircuit{}, err
+	// 	}
+	// } else if !ioutils.IsGzip(wasm) {
+	// 	return types.MsgStoreCircuit{}, errors.New("invalid input file. Use wasm binary or gzip")
+	// }
+
+	perm, err := parseAccessConfigFlags(flags)
+	if err != nil {
+		return types.MsgStoreCircuit{}, err
+	}
+
+	msg := types.MsgStoreCircuit{
+		Sender:                sender,
+		CircuitBinaryFile:     wasm,
 		InstantiatePermission: perm,
 	}
 	return msg, msg.ValidateBasic()
