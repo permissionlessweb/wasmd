@@ -45,7 +45,7 @@ func InitGenesis(ctx sdk.Context, keeper *Keeper, data types.GenesisState) ([]ab
 
 	var maxCircuitID uint64
 	for i, code := range data.Circuits {
-		err := keeper.importCode(ctx, code.ZkID, code.ZkInfo, code.ZkBytes)
+		err := keeper.importCircuit(ctx, code.ZkID, code.ZkInfo, code.ZkBytes)
 		if err != nil {
 			return nil, errorsmod.Wrapf(err, "circuit %d with idzk-: %d", i, code.ZkID)
 		}

@@ -47,6 +47,21 @@ func (c CodeInfo) ValidateBasic() error {
 	}
 	return nil
 }
+func (z CircuitInfo) ValidateBasic() error {
+	if len(z.CircuitHash) == 0 {
+		return errorsmod.Wrap(ErrEmpty, "circuit hash")
+	}
+	if _, err := sdk.AccAddressFromBech32(z.Creator); err != nil {
+		return errorsmod.Wrap(err, "creator")
+	}
+	//TODO: implement minimum circuit bytes validation
+	// z.VkLen
+	// z.VkpLen
+	if err := z.InstantiateConfig.ValidateBasic(); err != nil {
+		return errorsmod.Wrap(err, "instantiate config")
+	}
+	return nil
+}
 
 // NewCodeInfo fills a new CodeInfo struct
 func NewCodeInfo(codeHash []byte, creator sdk.AccAddress, instantiatePermission AccessConfig) CodeInfo {

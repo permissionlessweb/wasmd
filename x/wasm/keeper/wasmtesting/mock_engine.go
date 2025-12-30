@@ -26,6 +26,9 @@ type MockWasmEngine struct {
 	StoreCodeFn               func(codeID wasmvm.WasmCode, gasLimit uint64) (wasmvm.Checksum, uint64, error)
 	StoreCodeUncheckedFn      func(codeID wasmvm.WasmCode) (wasmvm.Checksum, error)
 	SimulateStoreCodeFn       func(codeID wasmvm.WasmCode, gasLimit uint64) (wasmvm.Checksum, uint64, error)
+	StoreCircuitFn            func(zkID wasmvm.CircuitBinary, gasLimit uint64) (wasmvm.Checksum, uint64, error)
+	StoreCircuitUncheckedFn   func(zkID wasmvm.CircuitBinary) (wasmvm.Checksum, error)
+	SimulateStoreCircuitFn    func(zkID wasmvm.CircuitBinary, gasLimit uint64) (wasmvm.Checksum, uint64, error)
 	SimulateStoreCodeWithVkFn func(codeID, vkID wasmvm.WasmCode, gasLimit uint64) ([]wasmvm.Checksum, uint64, error)
 	AnalyzeCodeFn             func(codeID wasmvm.Checksum) (*wasmvmtypes.AnalysisReport, error)
 	InstantiateFn             func(codeID wasmvm.Checksum, env wasmvmtypes.Env, info wasmvmtypes.MessageInfo, initMsg []byte, store wasmvm.KVStore, goapi wasmvm.GoAPI, querier wasmvm.Querier, gasMeter wasmvm.GasMeter, gasLimit uint64, deserCost wasmvmtypes.UFraction) (*wasmvmtypes.ContractResult, uint64, error)
@@ -142,18 +145,39 @@ func (m *MockWasmEngine) IBC2PacketSend(codeID wasmvm.Checksum, env wasmvmtypes.
 	return m.IBC2PacketSendFn(codeID, env, msg, store, goapi, querier, gasMeter, gasLimit, deserCost)
 }
 
-func (m *MockWasmEngine) StoreCode(codeID wasmvm.WasmCode, gasLimit uint64) (wasmvm.Checksum, uint64, error) {
-	if m.StoreCodeFn == nil {
-		panic("not supposed to be called!")
-	}
-	return m.StoreCodeFn(codeID, gasLimit)
-}
-
 func (m *MockWasmEngine) StoreCodeWithCircuit(codeID wasmvm.WasmCode, vkID wasmvm.CircuitBinary, gasLimit uint64) ([]wasmvm.Checksum, uint64, error) {
 	if m.StoreCodeWithCircuitFn == nil {
 		panic("not supposed to be called!")
 	}
 	return m.StoreCodeWithCircuitFn(codeID, vkID, gasLimit)
+}
+
+func (m *MockWasmEngine) StoreCircuit(zkID wasmvm.CircuitBinary, gasLimit uint64) (wasmvm.Checksum, uint64, error) {
+	if m.StoreCircuitFn == nil {
+		panic("not supposed to be called!")
+	}
+	return m.StoreCircuitFn(zkID, gasLimit)
+}
+
+func (m *MockWasmEngine) StoreCircuitUnchecked(zkID wasmvm.CircuitBinary) (wasmvm.Checksum, error) {
+	if m.StoreCircuitUncheckedFn == nil {
+		panic("not supposed to be called!")
+	}
+	return m.StoreCircuitUncheckedFn(zkID)
+}
+
+func (m *MockWasmEngine) SimulateStoreCircuit(zkID wasmvm.CircuitBinary, gasLimit uint64) (wasmvm.Checksum, uint64, error) {
+	if m.SimulateStoreCircuitFn == nil {
+		panic("not supposed to be called!")
+	}
+	return m.SimulateStoreCircuitFn(zkID, gasLimit)
+}
+
+func (m *MockWasmEngine) StoreCode(codeID wasmvm.WasmCode, gasLimit uint64) (wasmvm.Checksum, uint64, error) {
+	if m.StoreCodeFn == nil {
+		panic("not supposed to be called!")
+	}
+	return m.StoreCodeFn(codeID, gasLimit)
 }
 
 func (m *MockWasmEngine) StoreCodeUnchecked(codeID wasmvm.WasmCode) (wasmvm.Checksum, error) {

@@ -37,7 +37,7 @@ message GenesisState {
 // Circuit struct encompasses CodeInfo and CircuitBinary
 message Circuit {
   uint64 zk_id = 1 [ (gogoproto.customname) = "ZkID" ];
-  CodeInfo zk_info = 2
+  CircuitInfo zk_info = 2
       [ (gogoproto.nullable) = false, (amino.dont_omitempty) = true ];
   bytes zk_bytes = 3;
   // Pinned to wasmvm cache

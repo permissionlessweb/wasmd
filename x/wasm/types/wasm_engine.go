@@ -21,6 +21,7 @@ type WasmEngine interface {
 	//
 	// Returns both the checksum, as well as the gas cost of compilation (in CosmWasm Gas) or an error.
 	StoreCode(code wasmvm.WasmCode, gasLimit uint64) (wasmvm.Checksum, uint64, error)
+	StoreCircuit(zk wasmvm.CircuitBinary, gasLimit uint64) (wasmvm.Checksum, uint64, error)
 	// StoreCodeWithCircuit  will perform the same functions as StoreCode, but also stores a halo2 plonk circuit in pinned memory.
 	// Both can be referenced later via Checksum.
 	//
@@ -34,6 +35,8 @@ type WasmEngine interface {
 	// It does the same as StoreCode but without the static checks.
 	// Use this for adding code that was checked before, particularly in the case of state sync.
 	StoreCodeUnchecked(code wasmvm.WasmCode) (wasmvm.Checksum, error)
+	// StoreCircuitUnchecked will compile the circuit binary file and store to both disk and pinned cache.
+	StoreCircuitUnchecked(zk wasmvm.CircuitBinary) (wasmvm.Checksum, error)
 
 	// SimulateStoreCode works like StoreCode, but does not actually store the code.
 	// Instead, it just does all the validation and compilation steps without storing the result on disk.

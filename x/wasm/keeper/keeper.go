@@ -362,6 +362,35 @@ func (k Keeper) importCode(ctx context.Context, codeID uint64, codeInfo types.Co
 	return store.Set(key, k.cdc.MustMarshal(&codeInfo))
 }
 
+func (k Keeper) importCircuit(ctx context.Context, zkID uint64, zkInfo types.CircuitInfo, zkBinary []byte) error {
+	if ioutils.IsGzip(zkBinary) {
+		var err error
+		zkBinary, err = ioutils.Uncompress(zkBinary, math.MaxInt64)
+		if err != nil {
+			return types.ErrCreateFailed.Wrap(errorsmod.Wrap(err, "uncompress wasm archive").Error())
+		}
+	}
+	newCircuitHash, err := k.wasmVM.StoreCircuitUnchecked(zkBinary)
+	if err != nil {
+		return errorsmod.Wrap(types.ErrCreateFailed, err.Error())
+	}
+	if !bytes.Equal(zkInfo.CircuitHash, newCircuitHash) {
+		return errorsmod.Wrap(types.ErrInvalid, "circuit hash not same")
+	}
+
+	store := k.storeService.OpenKVStore(ctx)
+	key := types.GetCircuitKey(zkID)
+	ok, err := store.Has(key)
+	if err != nil {
+		return errorsmod.Wrap(err, "has zk-id key")
+	}
+	if ok {
+		return errorsmod.Wrapf(types.ErrDuplicate, "duplicate circuit: %d", zkID)
+	}
+	// 0x01 | codeID (uint64) -> ContractInfo
+	return store.Set(key, k.cdc.MustMarshal(&zkInfo))
+}
+
 func (k Keeper) instantiate(
 	ctx context.Context,
 	codeID uint64,
