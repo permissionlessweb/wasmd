@@ -21,7 +21,12 @@ type WasmEngine interface {
 	//
 	// Returns both the checksum, as well as the gas cost of compilation (in CosmWasm Gas) or an error.
 	StoreCode(code wasmvm.WasmCode, gasLimit uint64) (wasmvm.Checksum, uint64, error)
-
+	// StoreCodeWithCircuit  will perform the same functions as StoreCode, but also stores a halo2 plonk circuit in pinned memory.
+	// Both can be referenced later via Checksum.
+	//
+	// Returns both the checksum, as well as the gas cost of compilation (in CosmWasm Gas) or an error.
+	StoreCodeWithCircuit(code wasmvm.WasmCode, vk wasmvm.CircuitBinary, gasLimit uint64) ([]wasmvm.Checksum, uint64, error)
+	SimulateStoreCodeWithCircuit(code wasmvm.WasmCode, vk wasmvm.CircuitBinary, gasLimit uint64) ([]wasmvm.Checksum, uint64, error)
 	// StoreCodeUnchecked will compile the wasm code, and store the resulting pre-compile
 	// as well as the original code. Both can be referenced later via checksum
 	// This must be done one time for given code, after which it can be
@@ -172,6 +177,8 @@ type WasmEngine interface {
 	// and the larger binary blobs (wasm and pre-compiles) are all managed by the
 	// rust library
 	GetCode(code wasmvm.Checksum) (wasmvm.WasmCode, error)
+	// GetCircuit will function as GetCode, however specifically for zk-proof circuit verifing-keys.
+	GetCircuit(code wasmvm.Checksum) (wasmvm.CircuitBinary, error)
 
 	// Cleanup should be called when no longer using this to free resources on the rust-side
 	Cleanup()
@@ -350,12 +357,19 @@ type WasmEngine interface {
 	// always loaded quickly when executed.
 	// Pin is idempotent.
 	Pin(checksum wasmvm.Checksum) error
+	// PinCircuit pins a circuit to an in-memory cache, such that is
+	// always loaded quickly when executed.
+	// Pin is idempotent.
+	PinCircuit(checksum wasmvm.Checksum) error
 
 	// Unpin removes the guarantee of a contract to be pinned (see Pin).
 	// After calling this, the code may or may not remain in memory depending on
 	// the implementor's choice.
 	// Unpin is idempotent.
 	Unpin(checksum wasmvm.Checksum) error
+
+	// UnpinCircuit functions like unpin but for zk-circuit binary files.
+	UnpinCircuit(checksum wasmvm.Checksum) error
 
 	// GetMetrics some internal metrics for monitoring purposes.
 	GetMetrics() (*wasmvmtypes.Metrics, error)

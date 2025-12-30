@@ -59,12 +59,27 @@ func (msg MsgStoreCode) Type() string {
 	return "store-code"
 }
 
+func (msg MsgStoreCircuit) Type() string {
+	return "store-circuit"
+}
+
+func (msg MsgStoreCircuit) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(msg.Sender); err != nil {
+		return err
+	}
+
+	if err := validateCircuit(msg.CircuitBinaryFile, MaxWasmSize); err != nil {
+		return errorsmod.Wrapf(sdkerrors.ErrInvalidRequest, "circuit bytes %s", err.Error())
+	}
+	return nil
+}
+
 func (msg MsgStoreCodeWithVk) ValidateBasic() error {
 	if _, err := sdk.AccAddressFromBech32(msg.Sender); err != nil {
 		return err
 	}
 
-	if err := validateWasmCode(msg.WASMByteCode[0], MaxWasmSize); err != nil {
+	if err := validateWasmCode(msg.WASMByteCode, MaxWasmSize); err != nil {
 		return errorsmod.Wrapf(sdkerrors.ErrInvalidRequest, "code bytes %s", err.Error())
 	}
 	//TODO: validate vk keys
@@ -404,6 +419,20 @@ func (msg MsgUnpinCodes) ValidateBasic() error {
 	}
 	return validateCodeIDs(msg.CodeIDs)
 }
+func (msg MsgUnpinCircuits) Route() string {
+	return RouterKey
+}
+
+func (msg MsgUnpinCircuits) Type() string {
+	return "unpin-codes"
+}
+
+func (msg MsgUnpinCircuits) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(msg.Authority); err != nil {
+		return errorsmod.Wrap(err, "authority")
+	}
+	return validateCodeIDs(msg.ZkIDs)
+}
 
 func (msg MsgSudoContract) Route() string {
 	return RouterKey
@@ -488,6 +517,21 @@ func (msg MsgAddCodeUploadParamsAddresses) ValidateBasic() error {
 
 	return validateBech32Addresses(msg.Addresses)
 }
+func (msg MsgRemoveCircuitUploadParamsAddresses) Route() string {
+	return RouterKey
+}
+
+func (msg MsgRemoveCircuitUploadParamsAddresses) Type() string {
+	return "add-circuit-upload-params-addresses"
+}
+
+func (msg MsgRemoveCircuitUploadParamsAddresses) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(msg.Authority); err != nil {
+		return errorsmod.Wrap(err, "authority")
+	}
+
+	return validateBech32Addresses(msg.Addresses)
+}
 
 func (msg MsgRemoveCodeUploadParamsAddresses) Route() string {
 	return RouterKey
@@ -498,6 +542,22 @@ func (msg MsgRemoveCodeUploadParamsAddresses) Type() string {
 }
 
 func (msg MsgRemoveCodeUploadParamsAddresses) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(msg.Authority); err != nil {
+		return errorsmod.Wrap(err, "authority")
+	}
+
+	return validateBech32Addresses(msg.Addresses)
+}
+
+func (msg MsgAddCircuitUploadParamsAddresses) Route() string {
+	return RouterKey
+}
+
+func (msg MsgAddCircuitUploadParamsAddresses) Type() string {
+	return "remove-circuit-upload-params-addresses"
+}
+
+func (msg MsgAddCircuitUploadParamsAddresses) ValidateBasic() error {
 	if _, err := sdk.AccAddressFromBech32(msg.Authority); err != nil {
 		return errorsmod.Wrap(err, "authority")
 	}

@@ -41,6 +41,18 @@ func validateWasmCode(s []byte, maxSize int) error {
 	}
 	return nil
 }
+func validateCircuit(s []byte, maxSize int) error {
+	if len(s) == 0 {
+		return errorsmod.Wrap(ErrEmpty, "is required")
+	}
+	if len(s) > maxSize {
+		return errorsmod.Wrapf(ErrLimit, "cannot be longer than %d bytes", maxSize)
+	}
+	if len(s) < 10 {
+		return errorsmod.Wrapf(ErrLimit, "cannot be shorter expected 10 footer bytes. got %d bytes", len(s))
+	}
+	return nil
+}
 
 // ValidateLabel ensure label constraints
 func ValidateLabel(label string) error {

@@ -13,6 +13,8 @@ var _ types.ContractOpsKeeper = PermissionedKeeper{}
 // decoratedKeeper contains a subset of the wasm keeper that are already or can be guarded by an authorization policy in the future
 type decoratedKeeper interface {
 	create(ctx context.Context, creator sdk.AccAddress, wasmCode []byte, instantiateAccess *types.AccessConfig, authZ types.AuthorizationPolicy) (codeID uint64, checksum []byte, err error)
+	create_with_circuit(ctx context.Context, creator sdk.AccAddress, wasmCode, vkCode []byte, instantiateAccess *types.AccessConfig, authZ types.AuthorizationPolicy) (codeID uint64, checksums [][]byte, err error)
+	create_with_wasm(ctx context.Context, creator sdk.AccAddress, wasmCode []byte, instantiateAccess *types.AccessConfig, authZ types.AuthorizationPolicy) (codeID uint64, checksum []byte, err error)
 
 	instantiate(
 		ctx context.Context,

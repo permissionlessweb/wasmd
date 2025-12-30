@@ -23,8 +23,10 @@ type ViewKeeper interface {
 	IterateContractsByCode(ctx context.Context, codeID uint64, cb func(address sdk.AccAddress) bool)
 	IterateContractState(ctx context.Context, contractAddress sdk.AccAddress, cb func(key, value []byte) bool)
 	GetCodeInfo(ctx context.Context, codeID uint64) *CodeInfo
+	GetCircuitInfo(ctx context.Context, codeID uint64) *CircuitInfo
 	IterateCodeInfos(ctx context.Context, cb func(uint64, CodeInfo) bool)
 	GetByteCode(ctx context.Context, codeID uint64) ([]byte, error)
+	GetByteCircuit(ctx context.Context, codeID uint64) ([]byte, error)
 	IsPinnedCode(ctx context.Context, codeID uint64) bool
 	GetParams(ctx context.Context) Params
 	GetWasmLimits() wasmvmtypes.WasmLimits

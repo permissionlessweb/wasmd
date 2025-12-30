@@ -37,6 +37,11 @@ var (
 	ParamsKey                                      = []byte{0x10}
 	AsyncAckKeyPrefix                              = []byte{0x11}
 
+	CircuitKeyPrefix          = []byte{0x16}
+	CircuitsByCreatorPrefix   = []byte{0x18}
+	PinnedCircuitsIndexPrefix = []byte{0x07}
+
+	KeySequenceHalo2VkID  = append(SequenceKeyPrefix, []byte("lastPlonkishCircuit")...)
 	KeySequenceCodeID     = append(SequenceKeyPrefix, []byte("lastCodeId")...)
 	KeySequenceInstanceID = append(SequenceKeyPrefix, []byte("lastContractId")...)
 )
@@ -45,6 +50,12 @@ var (
 func GetCodeKey(codeID uint64) []byte {
 	contractIDBz := sdk.Uint64ToBigEndian(codeID)
 	return append(CodeKeyPrefix, contractIDBz...)
+}
+
+// GetCircuitKey constructs the key for retrieving the ID for the zk-proof circuit binary
+func GetCircuitKey(zkId uint64) []byte {
+	circuitIdBz := sdk.Uint64ToBigEndian(zkId)
+	return append(CircuitKeyPrefix, circuitIdBz...)
 }
 
 // GetContractAddressKey returns the key for the WASM contract instance
@@ -56,6 +67,12 @@ func GetContractAddressKey(addr sdk.AccAddress) []byte {
 func GetContractsByCreatorPrefix(addr sdk.AccAddress) []byte {
 	bz := address.MustLengthPrefix(addr)
 	return append(ContractsByCreatorPrefix, bz...)
+}
+
+// GetContractsByCreatorPrefix returns the contracts by creator prefix for the WASM contract instance
+func GetCircuitsByCreatorPrefix(addr sdk.AccAddress) []byte {
+	bz := address.MustLengthPrefix(addr)
+	return append(CircuitsByCreatorPrefix, bz...)
 }
 
 // GetContractStorePrefix returns the store prefix for the WASM contract instance
@@ -116,6 +133,19 @@ func GetContractByCreatorSecondaryIndexKey(bz, position []byte, contractAddr sdk
 	return r
 }
 
+// GetContractByCreatorSecondaryIndexKey returns the key for the second index: `<prefix><creatorAddress length><created time><creatorAddress><contractAddr>`
+func GetCircuitByCreatorSecondaryIndexKey(bz, position []byte, contractAddr sdk.AccAddress) []byte {
+	prefixBytes := GetCircuitsByCreatorPrefix(bz)
+	lenPrefixBytes := len(prefixBytes)
+	r := make([]byte, lenPrefixBytes+AbsoluteTxPositionLen+len(contractAddr))
+
+	copy(r[:lenPrefixBytes], prefixBytes)
+	copy(r[lenPrefixBytes:lenPrefixBytes+AbsoluteTxPositionLen], position)
+	copy(r[lenPrefixBytes+AbsoluteTxPositionLen:], contractAddr)
+
+	return r
+}
+
 // GetContractCodeHistoryElementKey returns the key for a contract code history entry: `<prefix><contractAddr><position>`
 func GetContractCodeHistoryElementKey(contractAddr sdk.AccAddress, pos uint64) []byte {
 	prefix := GetContractCodeHistoryElementPrefix(contractAddr)
@@ -145,7 +175,21 @@ func GetPinnedCodeIndexPrefix(codeID uint64) []byte {
 	return r
 }
 
+// GetPinnedCodeIndexPrefix returns the key prefix for a code id pinned into the wasmvm cache
+func GetPinnedCircuitIndexPrefix(zkID uint64) []byte {
+	prefixLen := len(PinnedCircuitsIndexPrefix)
+	r := make([]byte, prefixLen+8)
+	copy(r[0:], PinnedCircuitsIndexPrefix)
+	copy(r[prefixLen:], sdk.Uint64ToBigEndian(zkID))
+	return r
+}
+
 // ParsePinnedCodeIndex converts the serialized code ID back.
 func ParsePinnedCodeIndex(s []byte) uint64 {
+	return sdk.BigEndianToUint64(s)
+}
+
+// ParsePinnedCircuitIndex converts the serialized code ID back.
+func ParsePinnedCircuitIndex(s []byte) uint64 {
 	return sdk.BigEndianToUint64(s)
 }

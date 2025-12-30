@@ -57,6 +57,15 @@ func NewCodeInfo(codeHash []byte, creator sdk.AccAddress, instantiatePermission 
 	}
 }
 
+// NewCodeInfo fills a new CodeInfo struct
+func NewCircuitInfo(codeHash []byte, creator sdk.AccAddress, instantiatePermission AccessConfig) CodeInfo {
+	return CodeInfo{
+		CodeHash:          codeHash,
+		Creator:           creator.String(),
+		InstantiateConfig: instantiatePermission,
+	}
+}
+
 var AllCodeHistoryTypes = []ContractCodeHistoryOperationType{ContractCodeHistoryOperationTypeGenesis, ContractCodeHistoryOperationTypeInit, ContractCodeHistoryOperationTypeMigrate}
 
 // NewContractInfo creates a new instance of a given WASM contract info

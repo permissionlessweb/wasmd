@@ -23,8 +23,8 @@ func NewMsgServerImpl(k *Keeper) types.MsgServer {
 	return &msgServer{keeper: k}
 }
 
-// StoreCodeWithVk stores a new wasm code on chain
-func (m msgServer) StoreCodeWithVk(ctx context.Context, msg *types.MsgStoreCodeWithVk) (*types.MsgStoreCodeWithVkResponse, error) {
+// StoreCodeWithCircuit stores both WASM and VK code on chain
+func (m msgServer) StoreCodeWithCircuit(ctx context.Context, msg *types.MsgStoreCodeWithVk) (*types.MsgStoreCodeWithCircuitResponse, error) {
 	if err := msg.ValidateBasic(); err != nil {
 		return nil, err
 	}
@@ -35,14 +35,21 @@ func (m msgServer) StoreCodeWithVk(ctx context.Context, msg *types.MsgStoreCodeW
 
 	policy := m.selectAuthorizationPolicy(ctx, msg.Sender)
 
-	codeID, checksum, err := m.keeper.create(ctx, senderAddr, msg.WASMByteCode[0], msg.InstantiatePermission, policy)
+	codeID, checksums, err := m.keeper.create_with_circuit(ctx, senderAddr, msg.WASMByteCode, msg.CircuitBinaryFile, msg.InstantiatePermission, policy)
 	if err != nil {
 		return nil, err
 	}
 
-	return &types.MsgStoreCodeWithVkResponse{
-		CodeID:    codeID,
-		Checksums: [][]byte{checksum},
+	return &types.MsgStoreCodeWithCircuitResponse{
+		MsgStoreCodeWithCircuitResponse: []*types.MsgStoreCodeResponse{
+			&types.MsgStoreCodeResponse{
+				CodeID:   codeID,
+				Checksum: checksums[0],
+			},
+			&types.MsgStoreCodeResponse{
+				CodeID:   codeID,
+				Checksum: checksums[1],
+			}},
 	}, nil
 }
 
@@ -65,6 +72,29 @@ func (m msgServer) StoreCode(ctx context.Context, msg *types.MsgStoreCode) (*typ
 
 	return &types.MsgStoreCodeResponse{
 		CodeID:   codeID,
+		Checksum: checksum,
+	}, nil
+}
+
+// StoreCircuit stores a new circuit (VK) code on chain
+func (m msgServer) StoreCircuit(ctx context.Context, msg *types.MsgStoreCircuit) (*types.MsgStoreCircuitResponse, error) {
+	if err := msg.ValidateBasic(); err != nil {
+		return nil, err
+	}
+	senderAddr, err := sdk.AccAddressFromBech32(msg.Sender)
+	if err != nil {
+		return nil, errorsmod.Wrap(err, "sender")
+	}
+
+	policy := m.selectAuthorizationPolicy(ctx, msg.Sender)
+
+	codeID, checksum, err := m.keeper.create_with_wasm(ctx, senderAddr, msg.CircuitBinaryFile, msg.InstantiatePermission, policy)
+	if err != nil {
+		return nil, err
+	}
+
+	return &types.MsgStoreCircuitResponse{
+		ZkID:     codeID,
 		Checksum: checksum,
 	}, nil
 }
@@ -306,6 +336,26 @@ func (m msgServer) UnpinCodes(ctx context.Context, req *types.MsgUnpinCodes) (*t
 	return &types.MsgUnpinCodesResponse{}, nil
 }
 
+// UnpinCodes unpins a set of code ids in the wasmvm cache.
+func (m msgServer) UnpinCircuits(ctx context.Context, req *types.MsgUnpinCircuits) (*types.MsgUnpinCircuitsResponse, error) {
+	if err := req.ValidateBasic(); err != nil {
+		return nil, err
+	}
+
+	authority := m.keeper.GetAuthority()
+	if authority != req.Authority {
+		return nil, errorsmod.Wrapf(types.ErrInvalid, "invalid authority; expected %s, got %s", authority, req.Authority)
+	}
+
+	for _, zkID := range req.ZkIDs {
+		if err := m.keeper.unpinCircuit(ctx, zkID); err != nil {
+			return nil, err
+		}
+	}
+
+	return &types.MsgUnpinCircuitsResponse{}, nil
+}
+
 // SudoContract calls sudo on a contract.
 func (m msgServer) SudoContract(ctx context.Context, req *types.MsgSudoContract) (*types.MsgSudoContractResponse, error) {
 	if err := req.ValidateBasic(); err != nil {
@@ -366,6 +416,38 @@ func (m msgServer) StoreAndInstantiateContract(goCtx context.Context, req *types
 	}, nil
 }
 
+// AddCircuitUploadParamsAddresses adds addresses to circuit upload params
+func (m msgServer) AddCircuitUploadParamsAddresses(goCtx context.Context, req *types.MsgAddCircuitUploadParamsAddresses) (*types.MsgAddCircuitUploadParamsAddressesResponse, error) {
+	if err := req.ValidateBasic(); err != nil {
+		return nil, err
+	}
+	authority := m.keeper.GetAuthority()
+	if authority != req.Authority {
+		return nil, errorsmod.Wrapf(types.ErrInvalid, "invalid authority; expected %s, got %s", authority, req.Authority)
+	}
+
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	params := m.keeper.GetParams(ctx)
+	if params.CodeUploadAccess.Permission != types.AccessTypeAnyOfAddresses {
+		return nil, errorsmod.Wrap(types.ErrInvalid, "permission")
+	}
+
+	addresses := params.CodeUploadAccess.Addresses
+	for _, newAddr := range req.Addresses {
+		if !slices.Contains(addresses, newAddr) {
+			addresses = append(addresses, newAddr)
+		}
+	}
+
+	params.CodeUploadAccess.Addresses = addresses
+	if err := m.keeper.SetParams(ctx, params); err != nil {
+		return nil, err
+	}
+
+	return &types.MsgAddCircuitUploadParamsAddressesResponse{}, nil
+}
+
 // AddCodeUploadParamsAddresses adds addresses to code upload params
 func (m msgServer) AddCodeUploadParamsAddresses(goCtx context.Context, req *types.MsgAddCodeUploadParamsAddresses) (*types.MsgAddCodeUploadParamsAddressesResponse, error) {
 	if err := req.ValidateBasic(); err != nil {
@@ -396,6 +478,40 @@ func (m msgServer) AddCodeUploadParamsAddresses(goCtx context.Context, req *type
 	}
 
 	return &types.MsgAddCodeUploadParamsAddressesResponse{}, nil
+}
+
+// RemoveCodeUploadParamsAddresses removes addresses to code upload params
+func (m msgServer) RemoveCircuitUploadParamsAddresses(goCtx context.Context, req *types.MsgRemoveCircuitUploadParamsAddresses) (*types.MsgRemoveCircuitUploadParamsAddressesResponse, error) {
+	if err := req.ValidateBasic(); err != nil {
+		return nil, err
+	}
+	authority := m.keeper.GetAuthority()
+	if authority != req.Authority {
+		return nil, errorsmod.Wrapf(types.ErrInvalid, "invalid authority; expected %s, got %s", authority, req.Authority)
+	}
+
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	params := m.keeper.GetParams(ctx)
+	if params.CodeUploadAccess.Permission != types.AccessTypeAnyOfAddresses {
+		return nil, errorsmod.Wrap(types.ErrInvalid, "permission")
+	}
+	addresses := params.CodeUploadAccess.Addresses
+	newAddresses := make([]string, 0)
+	for _, addr := range addresses {
+		if slices.Contains(req.Addresses, addr) {
+			continue
+		}
+		newAddresses = append(newAddresses, addr)
+	}
+
+	params.CodeUploadAccess.Addresses = newAddresses
+
+	if err := m.keeper.SetParams(ctx, params); err != nil {
+		return nil, err
+	}
+
+	return &types.MsgRemoveCircuitUploadParamsAddressesResponse{}, nil
 }
 
 // RemoveCodeUploadParamsAddresses removes addresses to code upload params

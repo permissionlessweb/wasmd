@@ -154,6 +154,101 @@ func (k Keeper) GetGasRegister() types.GasRegister {
 	return k.gasRegister
 }
 
+func (k Keeper) create_with_circuit(ctx context.Context, creator sdk.AccAddress, wasmCode, vkCode []byte, instantiateAccess *types.AccessConfig, authZ types.AuthorizationPolicy) (codeID uint64, checksums [][]byte, err error) {
+
+	if creator == nil {
+		return 0, checksums, errorsmod.Wrap(sdkerrors.ErrInvalidAddress, "cannot be nil")
+	}
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	// figure out proper instantiate access
+	defaultAccessConfig := k.getInstantiateAccessConfig(sdkCtx).With(creator)
+	if instantiateAccess == nil {
+		instantiateAccess = &defaultAccessConfig
+	}
+	chainConfigs := types.ChainAccessConfigs{
+		Instantiate: defaultAccessConfig,
+		Upload:      k.getUploadAccessConfig(sdkCtx),
+	}
+
+	if !authZ.CanCreateCode(chainConfigs, creator, *instantiateAccess) {
+		return 0, checksums, errorsmod.Wrap(sdkerrors.ErrUnauthorized, "can not create code")
+	}
+
+	if ioutils.IsGzip(wasmCode) {
+		sdkCtx.GasMeter().ConsumeGas(k.gasRegister.UncompressCosts(len(wasmCode)), "Uncompress gzip bytecode")
+		wasmCode, err = ioutils.Uncompress(wasmCode, int64(types.MaxWasmSize))
+		if err != nil {
+			return 0, checksums, types.ErrCreateFailed.Wrap(errorsmod.Wrap(err, "uncompress wasm archive").Error())
+		}
+	}
+
+	gasLeft := k.runtimeGasForContract(sdkCtx)
+	var gasUsed uint64
+	isSimulation := sdkCtx.ExecMode() == sdk.ExecModeSimulate
+	var vmChecksums []wasmvm.Checksum
+	if isSimulation {
+		// only simulate storing the code, no files are written
+		vmChecksums, gasUsed, err = k.wasmVM.SimulateStoreCodeWithCircuit(wasmCode, vkCode, gasLeft)
+
+	} else {
+		vmChecksums, gasUsed, err = k.wasmVM.StoreCodeWithCircuit(wasmCode, vkCode, gasLeft)
+	}
+
+	k.consumeRuntimeGas(sdkCtx, gasUsed)
+	if err != nil {
+		return 0, checksums, errorsmod.Wrap(types.ErrCreateFailed, err.Error())
+	}
+
+	// Convert checksums from wasmvm format
+	checksums = make([][]byte, len(vmChecksums))
+	for i, c := range vmChecksums {
+		checksums[i] = []byte(c)
+	}
+
+	// simulation gets default value for capabilities
+	var requiredCapabilities string
+	if !isSimulation {
+		report, err := k.wasmVM.AnalyzeCode(checksums[0])
+		if err != nil {
+			return 0, checksums, errorsmod.Wrap(types.ErrCreateFailed, err.Error())
+		}
+		requiredCapabilities = report.RequiredCapabilities
+	}
+	codeID = k.mustAutoIncrementID(sdkCtx, types.KeySequenceCodeID)
+	zkID := k.mustAutoIncrementID(sdkCtx, types.KeySequenceHalo2VkID)
+	k.Logger(sdkCtx).Debug("storing new contract with vk", "capabilities", requiredCapabilities, "code_id", codeID, "zk_id", zkID)
+	codeInfo := types.NewCodeInfo(checksums[0], creator, *instantiateAccess)
+	vkInfo := types.NewCircuitInfo(checksums[1], creator, *instantiateAccess)
+	k.mustStoreCodeInfo(sdkCtx, codeID, codeInfo)
+	k.mustStoreCircuitInfo(sdkCtx, zkID, vkInfo)
+
+	evt := sdk.NewEvent(
+		types.EventTypeStoreCode,
+		sdk.NewAttribute(types.AttributeKeyChecksum, hex.EncodeToString(checksums[0])),
+		sdk.NewAttribute(types.AttributeKeyVKChecksum, hex.EncodeToString(checksums[1])),
+		sdk.NewAttribute(types.AttributeKeyCodeID, strconv.FormatUint(codeID, 10)),
+		sdk.NewAttribute(types.AttributeKeyZkID, strconv.FormatUint(zkID, 10)),
+	)
+	for _, f := range strings.Split(requiredCapabilities, ",") {
+		evt.AppendAttributes(sdk.NewAttribute(types.AttributeKeyRequiredCapability, strings.TrimSpace(f)))
+	}
+	sdkCtx.EventManager().EmitEvent(evt)
+
+	return codeID, checksums, nil
+}
+
+// create_with_wasm stores only WASM code (no VK code)
+func (k Keeper) create_with_wasm(ctx context.Context, creator sdk.AccAddress, wasmCode []byte, instantiateAccess *types.AccessConfig, authZ types.AuthorizationPolicy) (codeID uint64, checksum []byte, err error) {
+	codeID, checksums, err := k.create_with_circuit(ctx, creator, wasmCode, nil, instantiateAccess, authZ)
+	if err != nil {
+		return 0, nil, err
+	}
+	if len(checksums) == 0 {
+		return 0, nil, types.ErrCreateFailed.Wrap("no checksums returned")
+	}
+	return codeID, checksums[0], nil
+}
+
 // TODO: update create to save vk to state
 func (k Keeper) create(ctx context.Context, creator sdk.AccAddress, wasmCode []byte, instantiateAccess *types.AccessConfig, authZ types.AuthorizationPolicy) (codeID uint64, checksum []byte, err error) {
 	if creator == nil {
@@ -226,6 +321,15 @@ func (k Keeper) mustStoreCodeInfo(ctx context.Context, codeID uint64, codeInfo t
 	store := k.storeService.OpenKVStore(ctx)
 	// 0x01 | codeID (uint64) -> ContractInfo
 	err := store.Set(types.GetCodeKey(codeID), k.cdc.MustMarshal(&codeInfo))
+	if err != nil {
+		panic(err)
+	}
+}
+
+func (k Keeper) mustStoreCircuitInfo(ctx context.Context, vkID uint64, codeInfo types.CodeInfo) {
+	store := k.storeService.OpenKVStore(ctx)
+	// 0x16 | vkID (uint64) -> ContractInfo
+	err := store.Set(types.GetCircuitKey(vkID), k.cdc.MustMarshal(&codeInfo))
 	if err != nil {
 		panic(err)
 	}
@@ -727,10 +831,27 @@ func (k Keeper) removeFromContractCodeSecondaryIndex(ctx context.Context, contra
 	return k.storeService.OpenKVStore(ctx).Delete(types.GetContractByCreatedSecondaryIndexKey(contractAddress, entry))
 }
 
+// addToCircuitCreatorSecondaryIndex adds element to the index for circuits-by-creator queries
+func (k Keeper) addToCircuitCreatorSecondaryIndex(ctx context.Context, creatorAddress sdk.AccAddress, position *types.AbsoluteTxPosition, contractAddress sdk.AccAddress) error {
+	store := k.storeService.OpenKVStore(ctx)
+	return store.Set(types.GetCircuitByCreatorSecondaryIndexKey(creatorAddress, position.Bytes(), contractAddress), []byte{})
+}
+
 // addToContractCreatorSecondaryIndex adds element to the index for contracts-by-creator queries
 func (k Keeper) addToContractCreatorSecondaryIndex(ctx context.Context, creatorAddress sdk.AccAddress, position *types.AbsoluteTxPosition, contractAddress sdk.AccAddress) error {
 	store := k.storeService.OpenKVStore(ctx)
 	return store.Set(types.GetContractByCreatorSecondaryIndexKey(creatorAddress, position.Bytes(), contractAddress), []byte{})
+}
+
+// IterateContractsByCreator iterates over all contracts with given creator address in order of creation time asc.
+func (k Keeper) IterateCircuitsByCreator(ctx context.Context, creator sdk.AccAddress, cb func(address sdk.AccAddress) bool) {
+	prefixStore := prefix.NewStore(runtime.KVStoreAdapter(k.storeService.OpenKVStore(ctx)), types.GetCircuitsByCreatorPrefix(creator))
+	for iter := prefixStore.Iterator(nil, nil); iter.Valid(); iter.Next() {
+		key := iter.Key()
+		if cb(key[types.AbsoluteTxPositionLen:]) {
+			return
+		}
+	}
 }
 
 // IterateContractsByCreator iterates over all contracts with given creator address in order of creation time asc.
@@ -980,6 +1101,37 @@ func (k Keeper) QueryRawRange(ctx context.Context, contractAddress sdk.AccAddres
 }
 
 // internal helper function
+func (k Keeper) circuitVkInstance(ctx context.Context, contractAddress sdk.AccAddress) (types.ContractInfo, types.CodeInfo, wasmvm.KVStore, error) {
+	store := k.storeService.OpenKVStore(ctx)
+
+	contractBz, err := store.Get(types.GetContractAddressKey(contractAddress))
+	if err != nil {
+		return types.ContractInfo{}, types.CodeInfo{}, nil, err
+	}
+	if contractBz == nil {
+		return types.ContractInfo{}, types.CodeInfo{}, nil, types.ErrNoSuchContractFn(contractAddress.String()).
+			Wrapf("address %s", contractAddress.String())
+	}
+	var contractInfo types.ContractInfo
+	k.cdc.MustUnmarshal(contractBz, &contractInfo)
+
+	codeInfoBz, err := store.Get(types.GetCodeKey(contractInfo.CodeID))
+	if err != nil {
+		return types.ContractInfo{}, types.CodeInfo{}, nil, err
+	}
+
+	if codeInfoBz == nil {
+		return contractInfo, types.CodeInfo{}, nil, types.ErrNoSuchCodeFn(contractInfo.CodeID).
+			Wrapf("code id %d", contractInfo.CodeID)
+	}
+	var codeInfo types.CodeInfo
+	k.cdc.MustUnmarshal(codeInfoBz, &codeInfo)
+	prefixStoreKey := types.GetContractStorePrefix(contractAddress)
+	prefixStore := prefix.NewStore(runtime.KVStoreAdapter(k.storeService.OpenKVStore(ctx)), prefixStoreKey)
+	return contractInfo, codeInfo, types.NewStoreAdapter(prefixStore), nil
+}
+
+// internal helper function
 func (k Keeper) contractInstance(ctx context.Context, contractAddress sdk.AccAddress) (types.ContractInfo, types.CodeInfo, wasmvm.KVStore, error) {
 	store := k.storeService.OpenKVStore(ctx)
 
@@ -1144,6 +1296,29 @@ func (k Keeper) GetCodeInfo(ctx context.Context, codeID uint64) *types.CodeInfo 
 	return &codeInfo
 }
 
+func (k Keeper) GetCircuitInfo(ctx context.Context, zkID uint64) *types.CircuitInfo {
+	store := k.storeService.OpenKVStore(ctx)
+	var circuitInfo types.CircuitInfo
+	zkInfoBz, err := store.Get(types.GetCircuitKey(zkID))
+	if err != nil {
+		panic(err)
+	}
+	if zkInfoBz == nil {
+		return nil
+	}
+	k.cdc.MustUnmarshal(zkInfoBz, &circuitInfo)
+	return &circuitInfo
+}
+
+func (k Keeper) containsCircuitInfo(ctx context.Context, zkID uint64) bool {
+	store := k.storeService.OpenKVStore(ctx)
+	ok, err := store.Has(types.GetCircuitKey(zkID))
+	if err != nil {
+		panic(err)
+	}
+	return ok
+}
+
 func (k Keeper) containsCodeInfo(ctx context.Context, codeID uint64) bool {
 	store := k.storeService.OpenKVStore(ctx)
 	ok, err := store.Has(types.GetCodeKey(codeID))
@@ -1151,6 +1326,21 @@ func (k Keeper) containsCodeInfo(ctx context.Context, codeID uint64) bool {
 		panic(err)
 	}
 	return ok
+}
+
+func (k Keeper) IterateCircuitInfos(ctx context.Context, cb func(uint64, types.CodeInfo) bool) {
+	prefixStore := prefix.NewStore(runtime.KVStoreAdapter(k.storeService.OpenKVStore(ctx)), types.CircuitKeyPrefix)
+	iter := prefixStore.Iterator(nil, nil)
+	defer iter.Close()
+
+	for ; iter.Valid(); iter.Next() {
+		var c types.CodeInfo
+		k.cdc.MustUnmarshal(iter.Value(), &c)
+		// cb returns true to stop early
+		if cb(binary.BigEndian.Uint64(iter.Key()), c) {
+			return
+		}
+	}
 }
 
 func (k Keeper) IterateCodeInfos(ctx context.Context, cb func(uint64, types.CodeInfo) bool) {
@@ -1166,6 +1356,20 @@ func (k Keeper) IterateCodeInfos(ctx context.Context, cb func(uint64, types.Code
 			return
 		}
 	}
+}
+
+func (k Keeper) GetByteCircuit(ctx context.Context, zkID uint64) ([]byte, error) {
+	store := k.storeService.OpenKVStore(ctx)
+	var circuitInfo types.CodeInfo
+	zkInfoBz, err := store.Get(types.GetCircuitKey(zkID))
+	if err != nil {
+		return nil, err
+	}
+	if zkInfoBz == nil {
+		return nil, nil
+	}
+	k.cdc.MustUnmarshal(zkInfoBz, &circuitInfo)
+	return k.wasmVM.GetCircuit(circuitInfo.CodeHash)
 }
 
 func (k Keeper) GetByteCode(ctx context.Context, codeID uint64) ([]byte, error) {
@@ -1225,6 +1429,29 @@ func (k Keeper) unpinCode(ctx context.Context, codeID uint64) error {
 	sdk.UnwrapSDKContext(ctx).EventManager().EmitEvent(sdk.NewEvent(
 		types.EventTypeUnpinCode,
 		sdk.NewAttribute(types.AttributeKeyCodeID, strconv.FormatUint(codeID, 10)),
+	))
+	return nil
+}
+
+// UnpinCode removes the wasm contract from wasmvm cache
+func (k Keeper) unpinCircuit(ctx context.Context, zkID uint64) error {
+	zkInfo := k.GetCircuitInfo(ctx, zkID)
+	if zkInfo == nil {
+		return types.ErrNoSuchCodeFn(zkID).Wrapf("zk-circuit id %d", zkID)
+	}
+	if err := k.wasmVM.UnpinCircuit(zkInfo.CircuitHash); err != nil {
+		return errorsmod.Wrap(types.ErrUnpinContractFailed, err.Error())
+	}
+
+	store := k.storeService.OpenKVStore(ctx)
+	err := store.Delete(types.GetPinnedCircuitIndexPrefix(zkID))
+	if err != nil {
+		return err
+	}
+
+	sdk.UnwrapSDKContext(ctx).EventManager().EmitEvent(sdk.NewEvent(
+		types.EventTypeUnpinCode,
+		sdk.NewAttribute(types.AttributeKeyCodeID, strconv.FormatUint(zkID, 10)),
 	))
 	return nil
 }

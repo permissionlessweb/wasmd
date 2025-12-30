@@ -166,7 +166,8 @@ func parseStoreCodeWithVkArgs(wasmfile, vkfile, sender string, flags *flag.FlagS
 
 	msg := types.MsgStoreCodeWithVk{
 		Sender:                sender,
-		WASMByteCode:          [][]byte{wasm, vk},
+		WASMByteCode:          wasm,
+		CircuitBinaryFile:     vk,
 		InstantiatePermission: perm,
 	}
 	return msg, msg.ValidateBasic()

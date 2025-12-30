@@ -352,6 +352,37 @@ func queryCodeInfo(ctx sdk.Context, codeID uint64, keeper types.ViewKeeper) *typ
 	}
 	return &info
 }
+func queryCircuit(ctx sdk.Context, zkID uint64, keeper types.ViewKeeper) (*types.QueryCodeResponse, error) {
+	info := queryCodeInfo(ctx, zkID, keeper)
+	if info == nil {
+		// nil, nil leads to 404 in rest handler
+		return nil, nil
+	}
+
+	code, err := keeper.GetByteCircuit(ctx, zkID)
+	if err != nil {
+		return nil, errorsmod.Wrap(err, "loading wasm code")
+	}
+
+	return &types.QueryCodeResponse{CodeInfoResponse: info, Data: code}, nil
+}
+
+func queryCircuitInfo(ctx sdk.Context, zkID uint64, keeper types.ViewKeeper) *types.CodeInfoResponse {
+	if zkID == 0 {
+		return nil
+	}
+	res := keeper.GetCircuitInfo(ctx, zkID)
+	if res == nil {
+		return nil
+	}
+	info := types.CodeInfoResponse{
+		CodeID:                zkID,
+		Creator:               res.Creator,
+		DataHash:              res.CircuitHash,
+		InstantiatePermission: res.InstantiateConfig,
+	}
+	return &info
+}
 
 func (q GrpcQuerier) PinnedCodes(c context.Context, req *types.QueryPinnedCodesRequest) (*types.QueryPinnedCodesResponse, error) {
 	if req == nil {
@@ -366,6 +397,34 @@ func (q GrpcQuerier) PinnedCodes(c context.Context, req *types.QueryPinnedCodesR
 	r := make([]uint64, 0)
 
 	prefixStore := prefix.NewStore(runtime.KVStoreAdapter(q.storeService.OpenKVStore(ctx)), types.PinnedCodeIndexPrefix)
+	pageRes, err := query.FilteredPaginate(prefixStore, paginationParams, func(key, _ []byte, accumulate bool) (bool, error) {
+		if accumulate {
+			r = append(r, sdk.BigEndianToUint64(key))
+		}
+		return true, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &types.QueryPinnedCodesResponse{
+		CodeIDs:    r,
+		Pagination: pageRes,
+	}, nil
+}
+
+func (q GrpcQuerier) PinnedCircuits(c context.Context, req *types.QueryPinnedCodesRequest) (*types.QueryPinnedCodesResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "empty request")
+	}
+	paginationParams, err := ensurePaginationParams(req.Pagination)
+	if err != nil {
+		return nil, err
+	}
+
+	ctx := sdk.UnwrapSDKContext(c)
+	r := make([]uint64, 0)
+
+	prefixStore := prefix.NewStore(runtime.KVStoreAdapter(q.storeService.OpenKVStore(ctx)), types.PinnedCircuitsIndexPrefix)
 	pageRes, err := query.FilteredPaginate(prefixStore, paginationParams, func(key, _ []byte, accumulate bool) (bool, error) {
 		if accumulate {
 			r = append(r, sdk.BigEndianToUint64(key))

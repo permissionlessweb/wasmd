@@ -58,6 +58,31 @@ message Params {
   ];
   AccessType instantiate_default_permission = 2
       [ (gogoproto.moretags) = "yaml:\"instantiate_default_permission\"" ];
+
+  AccessConfig circuit_upload_access = 3 [
+    (gogoproto.nullable) = false,
+    (amino.dont_omitempty) = true,
+    (gogoproto.moretags) = "yaml:\"circuit_upload_access\""
+  ];
+}
+
+// CodeInfo is data for the uploaded contract WASM code
+message CircuitInfo {
+  // CodeHash is the unique identifier created by wasmvm
+  bytes circuit_hash = 1;
+  // Creator address who initially stored the code
+  string creator = 2 [ (cosmos_proto.scalar) = "cosmos.AddressString" ];
+  // Used in v1beta1
+  reserved 3, 4;
+  // InstantiateConfig access control to apply on contract creation, optional
+  AccessConfig instantiate_config = 5
+      [ (gogoproto.nullable) = false, (amino.dont_omitempty) = true ];
+  // i: instances required during proof verification
+  uint64 i = 6;
+  // vkp_len - number of bytes representing vk_params
+  uint64 vkp_len = 7;
+  // vk_len - number of bytes representing vk_len
+  uint64 vk_len = 8;
 }
 
 // CodeInfo is data for the uploaded contract WASM code

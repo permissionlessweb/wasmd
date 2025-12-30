@@ -234,7 +234,7 @@ require (
 
 replace (
 	github.com/99designs/keyring => github.com/cosmos/keyring v1.2.0
-	github.com/CosmWasm/wasmvm/v3 => ../zk-wasmvm/mvp
+	github.com/CosmWasm/wasmvm/v3 => github.com/permissionlessweb/wasmvm/v3 v3.0.0-20251225071339-285f99fc0d2e
 	// dgrijalva/jwt-go is deprecated and doesn't receive security updates.
 	// See: https://github.com/cosmos/cosmos-sdk/issues/13134
 	github.com/dgrijalva/jwt-go => github.com/golang-jwt/jwt/v4 v4.4.2

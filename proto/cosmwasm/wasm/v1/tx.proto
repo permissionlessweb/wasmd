@@ -17,8 +17,12 @@ service Msg {
 
   // StoreCode to submit Wasm code to the system
   rpc StoreCode(MsgStoreCode) returns (MsgStoreCodeResponse);
-  // StoreCode to submit Wasm code to the system, along with an Halo2 Verifying Key
-  rpc StoreCodeWithVk(MsgStoreCodeWithVk) returns (MsgStoreCodeWithVkResponse);
+  // StoreCode to submit Wasm code to the system
+  rpc StoreCircuit(MsgStoreCircuit) returns (MsgStoreCircuitResponse);
+  // StoreCode to submit Wasm code to the system, along with an Halo2 Verifying
+  // Key
+  rpc StoreCodeWithCircuit(MsgStoreCodeWithVk)
+      returns (MsgStoreCodeWithCircuitResponse);
   //  InstantiateContract creates a new smart contract instance for the given
   //  code id.
   rpc InstantiateContract(MsgInstantiateContract)
@@ -58,6 +62,9 @@ service Msg {
   //
   // Since: 0.40
   rpc UnpinCodes(MsgUnpinCodes) returns (MsgUnpinCodesResponse);
+  // UnpinCircuits defines a governance operation for unpinning a set of
+  // zk-IDs in the zk-wasmvm cache. The authority is defined in the keeper.
+  rpc UnpinCircuits(MsgUnpinCircuits) returns (MsgUnpinCircuitsResponse);
   // StoreAndInstantiateContract defines a governance operation for storing
   // and instantiating the contract. The authority is defined in the keeper.
   //
@@ -69,11 +76,20 @@ service Msg {
   // The authority is defined in the keeper.
   rpc RemoveCodeUploadParamsAddresses(MsgRemoveCodeUploadParamsAddresses)
       returns (MsgRemoveCodeUploadParamsAddressesResponse);
+  // RemoveCodeUploadParamsAddresses defines a governance operation for
+  // removing addresses from circuit upload params
+  rpc RemoveCircuitUploadParamsAddresses(MsgRemoveCircuitUploadParamsAddresses)
+      returns (MsgRemoveCircuitUploadParamsAddressesResponse);
   // AddCodeUploadParamsAddresses defines a governance operation for
   // adding addresses to code upload params.
   // The authority is defined in the keeper.
   rpc AddCodeUploadParamsAddresses(MsgAddCodeUploadParamsAddresses)
       returns (MsgAddCodeUploadParamsAddressesResponse);
+  // AddCircuitUploadParamsAddresses defines a governance operation for
+  // adding addresses to circuit upload params.
+  // The authority is defined in the keeper.
+  rpc AddCircuitUploadParamsAddresses(MsgAddCircuitUploadParamsAddresses)
+      returns (MsgAddCircuitUploadParamsAddressesResponse);
   // StoreAndMigrateContract defines a governance operation for storing
   // and migrating the contract. The authority is defined in the keeper.
   //
@@ -87,7 +103,7 @@ service Msg {
       returns (MsgUpdateContractLabelResponse);
 }
 
-// MsgStoreCode submit Wasm code to the system
+// MsgStoreCodeWithVk submit Wasm code to the system with bytes of a circuit
 message MsgStoreCodeWithVk {
   option (amino.name) = "wasm/MsgStoreCodeWithVk";
   option (cosmos.msg.v1.signer) = "sender";
@@ -95,14 +111,20 @@ message MsgStoreCodeWithVk {
   // Sender is the actor that signed the messages
   string sender = 1 [ (cosmos_proto.scalar) = "cosmos.AddressString" ];
   // [0-cosmwasm,1-halo2-vk]
-  repeated bytes blobs = 2 [ (gogoproto.customname) = "WASMByteCode" ];
+  bytes wasm_byte_code = 2 [ (gogoproto.customname) = "WASMByteCode" ];
+  bytes vk_byte_code = 6 [ (gogoproto.customname) = "CircuitBinaryFile" ];
   // Used in v1beta1
   reserved 3, 4;
   // InstantiatePermission access control to apply on contract creation,
   // optional
   AccessConfig instantiate_permission = 5;
 }
-
+// MsgStoreCodeResponse returns store result data.
+message MsgStoreCodeWithCircuitResponse {
+  // [0] - cosmwasm , [1] - vk
+  repeated MsgStoreCodeResponse res = 1
+      [ (gogoproto.customname) = "MsgStoreCodeWithCircuitResponse" ];
+}
 
 // MsgStoreCode submit Wasm code to the system
 message MsgStoreCode {
@@ -126,13 +148,27 @@ message MsgStoreCodeResponse {
   // Checksum is the sha256 hash of the stored code
   bytes checksum = 2;
 }
-// MsgStoreCodeResponse returns store result data.
-message MsgStoreCodeWithVkResponse {
+
+// MsgStoreCircuit submit Circuit code to the system
+message MsgStoreCircuit {
+  option (amino.name) = "wasm/MsgStoreCircuit";
+  option (cosmos.msg.v1.signer) = "sender";
+
+  // Sender is the actor that signed the messages
+  string sender = 1 [ (cosmos_proto.scalar) = "cosmos.AddressString" ];
+  // CircuitBinaryFile can be raw or gzip compressed
+  bytes circuit_binary = 2 [ (gogoproto.customname) = "CircuitBinaryFile" ];
+  // InstantiatePermission access control to apply on contract creation,
+  // (anyone, these-people, only me) optional
+  AccessConfig instantiate_permission = 3;
+}
+
+// MsgStoreCircuitResponse returns store result data.
+message MsgStoreCircuitResponse {
   // CodeID is the reference to the stored WASM code
-  uint64 code_id = 1 [ (gogoproto.customname) = "CodeID" ];
-  // Checksum is the sha256 hashes of the stored code & vk
-  // [0] - cosmwasm , [1] - vk
-  repeated bytes checksums = 2;
+  uint64 zk_id = 1 [ (gogoproto.customname) = "ZkID" ];
+  // Checksum is the sha256 hash of the stored code
+  bytes checksum = 2;
 }
 
 // MsgInstantiateContract create a new smart contract instance for the given
@@ -407,6 +443,28 @@ message MsgUnpinCodes {
 // Since: 0.40
 message MsgUnpinCodesResponse {}
 
+// MsgUnpinCircuits is the MsgUnpinCodes request type for zk-circuits.
+//
+// Since: 0.62
+message MsgUnpinCircuits {
+  option (amino.name) = "wasm/MsgUnpinCircuits";
+  option (cosmos.msg.v1.signer) = "authority";
+
+  // Authority is the address of the governance account.
+  string authority = 1 [ (cosmos_proto.scalar) = "cosmos.AddressString" ];
+  // ZkID references the zk-circuit codes
+  repeated uint64 zk_ids = 2 [
+    (gogoproto.customname) = "ZkIDs",
+    (gogoproto.moretags) = "yaml:\"zk_ids\""
+  ];
+}
+
+// MsgUnpinCircuitsResponse defines the response structure for executing a
+// MsgUnpinCircuits message.
+//
+// Since: 0.40
+message MsgUnpinCircuitsResponse {}
+
 // MsgStoreAndInstantiateContract is the MsgStoreAndInstantiateContract
 // request type.
 //
@@ -479,6 +537,22 @@ message MsgAddCodeUploadParamsAddresses {
 // structure for executing a MsgAddCodeUploadParamsAddresses message.
 message MsgAddCodeUploadParamsAddressesResponse {}
 
+// MsgAddCircuitUploadParamsAddresses is the
+// MsgAddCircuitUploadParamsAddresses request type.
+message MsgAddCircuitUploadParamsAddresses {
+  option (amino.name) = "wasm/MsgAddCircuitUploadParamsAddresses";
+  option (cosmos.msg.v1.signer) = "authority";
+
+  // Authority is the address of the governance account.
+  string authority = 1 [ (cosmos_proto.scalar) = "cosmos.AddressString" ];
+
+  repeated string addresses = 2 [ (gogoproto.moretags) = "yaml:\"addresses\"" ];
+}
+
+// MsgAddCircuitUploadParamsAddressesResponse defines the response
+// structure for executing a MsgAddCircuitUploadParamsAddresses message.
+message MsgAddCircuitUploadParamsAddressesResponse {}
+
 // MsgRemoveCodeUploadParamsAddresses is the
 // MsgRemoveCodeUploadParamsAddresses request type.
 message MsgRemoveCodeUploadParamsAddresses {
@@ -494,6 +568,22 @@ message MsgRemoveCodeUploadParamsAddresses {
 // MsgRemoveCodeUploadParamsAddressesResponse defines the response
 // structure for executing a MsgRemoveCodeUploadParamsAddresses message.
 message MsgRemoveCodeUploadParamsAddressesResponse {}
+
+// MsgRemoveCircuitUploadParamsAddresses is the
+// MsgRemoveCircuitUploadParamsAddresses request type.
+message MsgRemoveCircuitUploadParamsAddresses {
+  option (amino.name) = "wasm/MsgRemoveCircuitUploadParamsAddresses";
+  option (cosmos.msg.v1.signer) = "authority";
+
+  // Authority is the address of the governance account.
+  string authority = 1 [ (cosmos_proto.scalar) = "cosmos.AddressString" ];
+
+  repeated string addresses = 2 [ (gogoproto.moretags) = "yaml:\"addresses\"" ];
+}
+
+// MsgRemoveCircuitUploadParamsAddressesResponse defines the response
+// structure for executing a MsgRemoveCircuitUploadParamsAddresses message.
+message MsgRemoveCircuitUploadParamsAddressesResponse {}
 
 // MsgStoreAndMigrateContract is the MsgStoreAndMigrateContract
 // request type.
