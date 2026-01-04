@@ -157,41 +157,41 @@ func StoreCodeCmd() *cobra.Command {
 }
 
 // Prepares MsgStoreCode object from flags with gzipped wasm byte code field
-func parseStoreCodeWithCircuitArgs(wasmfile, vkfile, sender string, flags *flag.FlagSet) (types.MsgStoreCodeWithVk, error) {
+func parseStoreCodeWithCircuitArgs(wasmfile, vkfile, sender string, flags *flag.FlagSet) (types.MsgStoreCodeWithCircuit, error) {
 	wasm, err := os.ReadFile(wasmfile)
 	if err != nil {
-		return types.MsgStoreCodeWithVk{}, err
+		return types.MsgStoreCodeWithCircuit{}, err
 	}
 	vk, err := os.ReadFile(vkfile)
 	if err != nil {
-		return types.MsgStoreCodeWithVk{}, err
+		return types.MsgStoreCodeWithCircuit{}, err
 	}
 
 	// gzip the wasm file
 	if ioutils.IsWasm(wasm) {
 		wasm, err = ioutils.GzipIt(wasm)
 		if err != nil {
-			return types.MsgStoreCodeWithVk{}, err
+			return types.MsgStoreCodeWithCircuit{}, err
 		}
 	} else if !ioutils.IsGzip(wasm) {
-		return types.MsgStoreCodeWithVk{}, errors.New("invalid input file. Use wasm binary or gzip")
+		return types.MsgStoreCodeWithCircuit{}, errors.New("invalid input file. Use wasm binary or gzip")
 	}
-	// gzip the vk file
-	if ioutils.IsWasm(vk) {
-		vk, err = ioutils.GzipIt(vk)
-		if err != nil {
-			return types.MsgStoreCodeWithVk{}, err
-		}
-	} else if !ioutils.IsGzip(vk) {
-		return types.MsgStoreCodeWithVk{}, errors.New("invalid input file. Use wasm binary or gzip")
-	}
+	// // gzip the vk file
+	// if ioutils.IsWasm(vk) {
+	// 	vk, err = ioutils.GzipIt(vk)
+	// 	if err != nil {
+	// 		return types.MsgStoreCodeWithCircuit{}, err
+	// 	}
+	// } else if !ioutils.IsGzip(vk) {
+	// 	return types.MsgStoreCodeWithCircuit{}, errors.New("invalid input file. Use wasm binary or gzip")
+	// }
 
 	perm, err := parseAccessConfigFlags(flags)
 	if err != nil {
-		return types.MsgStoreCodeWithVk{}, err
+		return types.MsgStoreCodeWithCircuit{}, err
 	}
 
-	msg := types.MsgStoreCodeWithVk{
+	msg := types.MsgStoreCodeWithCircuit{
 		Sender:                sender,
 		WASMByteCode:          wasm,
 		CircuitBinaryFile:     vk,

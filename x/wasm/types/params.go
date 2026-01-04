@@ -88,6 +88,7 @@ func DefaultParams() Params {
 	return Params{
 		CodeUploadAccess:             AllowEverybody,
 		InstantiateDefaultPermission: AccessTypeEverybody,
+		CircuitUploadAccess:          AllowEverybody,
 	}
 }
 

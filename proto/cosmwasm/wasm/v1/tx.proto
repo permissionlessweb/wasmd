@@ -21,7 +21,7 @@ service Msg {
   rpc StoreCircuit(MsgStoreCircuit) returns (MsgStoreCircuitResponse);
   // StoreCode to submit Wasm code to the system, along with an Halo2 Verifying
   // Key
-  rpc StoreCodeWithCircuit(MsgStoreCodeWithVk)
+  rpc StoreCodeWithCircuit(MsgStoreCodeWithCircuit)
       returns (MsgStoreCodeWithCircuitResponse);
   //  InstantiateContract creates a new smart contract instance for the given
   //  code id.
@@ -103,9 +103,10 @@ service Msg {
       returns (MsgUpdateContractLabelResponse);
 }
 
-// MsgStoreCodeWithVk submit Wasm code to the system with bytes of a circuit
-message MsgStoreCodeWithVk {
-  option (amino.name) = "wasm/MsgStoreCodeWithVk";
+// MsgStoreCodeWithCircuit submit Wasm code to the system with bytes of a
+// circuit
+message MsgStoreCodeWithCircuit {
+  option (amino.name) = "wasm/MsgStoreCodeWithCircuit";
   option (cosmos.msg.v1.signer) = "sender";
 
   // Sender is the actor that signed the messages

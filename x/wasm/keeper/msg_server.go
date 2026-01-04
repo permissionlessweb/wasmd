@@ -24,7 +24,7 @@ func NewMsgServerImpl(k *Keeper) types.MsgServer {
 }
 
 // StoreCodeWithCircuit stores both WASM and VK code on chain
-func (m msgServer) StoreCodeWithCircuit(ctx context.Context, msg *types.MsgStoreCodeWithVk) (*types.MsgStoreCodeWithCircuitResponse, error) {
+func (m msgServer) StoreCodeWithCircuit(ctx context.Context, msg *types.MsgStoreCodeWithCircuit) (*types.MsgStoreCodeWithCircuitResponse, error) {
 	if err := msg.ValidateBasic(); err != nil {
 		return nil, err
 	}

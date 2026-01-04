@@ -8,6 +8,7 @@
     - [AbsoluteTxPosition](#cosmwasm.wasm.v1.AbsoluteTxPosition)
     - [AccessConfig](#cosmwasm.wasm.v1.AccessConfig)
     - [AccessTypeParam](#cosmwasm.wasm.v1.AccessTypeParam)
+    - [CircuitInfo](#cosmwasm.wasm.v1.CircuitInfo)
     - [CodeInfo](#cosmwasm.wasm.v1.CodeInfo)
     - [ContractCodeHistoryEntry](#cosmwasm.wasm.v1.ContractCodeHistoryEntry)
     - [ContractInfo](#cosmwasm.wasm.v1.ContractInfo)
@@ -31,6 +32,7 @@
     - [StoreCodeAuthorization](#cosmwasm.wasm.v1.StoreCodeAuthorization)
   
 - [cosmwasm/wasm/v1/genesis.proto](#cosmwasm/wasm/v1/genesis.proto)
+    - [Circuit](#cosmwasm.wasm.v1.Circuit)
     - [Code](#cosmwasm.wasm.v1.Code)
     - [Contract](#cosmwasm.wasm.v1.Contract)
     - [GenesisState](#cosmwasm.wasm.v1.GenesisState)
@@ -58,11 +60,16 @@
     - [UpdateInstantiateConfigProposal](#cosmwasm.wasm.v1.UpdateInstantiateConfigProposal)
   
 - [cosmwasm/wasm/v1/query.proto](#cosmwasm/wasm/v1/query.proto)
+    - [CircuitInfoResponse](#cosmwasm.wasm.v1.CircuitInfoResponse)
     - [CodeInfoResponse](#cosmwasm.wasm.v1.CodeInfoResponse)
     - [QueryAllContractStateRequest](#cosmwasm.wasm.v1.QueryAllContractStateRequest)
     - [QueryAllContractStateResponse](#cosmwasm.wasm.v1.QueryAllContractStateResponse)
     - [QueryBuildAddressRequest](#cosmwasm.wasm.v1.QueryBuildAddressRequest)
     - [QueryBuildAddressResponse](#cosmwasm.wasm.v1.QueryBuildAddressResponse)
+    - [QueryCircuitInfoRequest](#cosmwasm.wasm.v1.QueryCircuitInfoRequest)
+    - [QueryCircuitInfoResponse](#cosmwasm.wasm.v1.QueryCircuitInfoResponse)
+    - [QueryCircuitRequest](#cosmwasm.wasm.v1.QueryCircuitRequest)
+    - [QueryCircuitResponse](#cosmwasm.wasm.v1.QueryCircuitResponse)
     - [QueryCodeInfoRequest](#cosmwasm.wasm.v1.QueryCodeInfoRequest)
     - [QueryCodeInfoResponse](#cosmwasm.wasm.v1.QueryCodeInfoResponse)
     - [QueryCodeRequest](#cosmwasm.wasm.v1.QueryCodeRequest)
@@ -79,6 +86,8 @@
     - [QueryContractsByCreatorResponse](#cosmwasm.wasm.v1.QueryContractsByCreatorResponse)
     - [QueryParamsRequest](#cosmwasm.wasm.v1.QueryParamsRequest)
     - [QueryParamsResponse](#cosmwasm.wasm.v1.QueryParamsResponse)
+    - [QueryPinnedCircuitsRequest](#cosmwasm.wasm.v1.QueryPinnedCircuitsRequest)
+    - [QueryPinnedCircuitsResponse](#cosmwasm.wasm.v1.QueryPinnedCircuitsResponse)
     - [QueryPinnedCodesRequest](#cosmwasm.wasm.v1.QueryPinnedCodesRequest)
     - [QueryPinnedCodesResponse](#cosmwasm.wasm.v1.QueryPinnedCodesResponse)
     - [QueryRawContractStateRequest](#cosmwasm.wasm.v1.QueryRawContractStateRequest)
@@ -91,6 +100,8 @@
     - [Query](#cosmwasm.wasm.v1.Query)
   
 - [cosmwasm/wasm/v1/tx.proto](#cosmwasm/wasm/v1/tx.proto)
+    - [MsgAddCircuitUploadParamsAddresses](#cosmwasm.wasm.v1.MsgAddCircuitUploadParamsAddresses)
+    - [MsgAddCircuitUploadParamsAddressesResponse](#cosmwasm.wasm.v1.MsgAddCircuitUploadParamsAddressesResponse)
     - [MsgAddCodeUploadParamsAddresses](#cosmwasm.wasm.v1.MsgAddCodeUploadParamsAddresses)
     - [MsgAddCodeUploadParamsAddressesResponse](#cosmwasm.wasm.v1.MsgAddCodeUploadParamsAddressesResponse)
     - [MsgClearAdmin](#cosmwasm.wasm.v1.MsgClearAdmin)
@@ -103,20 +114,28 @@
     - [MsgInstantiateContractResponse](#cosmwasm.wasm.v1.MsgInstantiateContractResponse)
     - [MsgMigrateContract](#cosmwasm.wasm.v1.MsgMigrateContract)
     - [MsgMigrateContractResponse](#cosmwasm.wasm.v1.MsgMigrateContractResponse)
+    - [MsgPinCircuits](#cosmwasm.wasm.v1.MsgPinCircuits)
+    - [MsgPinCircuitsResponse](#cosmwasm.wasm.v1.MsgPinCircuitsResponse)
     - [MsgPinCodes](#cosmwasm.wasm.v1.MsgPinCodes)
     - [MsgPinCodesResponse](#cosmwasm.wasm.v1.MsgPinCodesResponse)
+    - [MsgRemoveCircuitUploadParamsAddresses](#cosmwasm.wasm.v1.MsgRemoveCircuitUploadParamsAddresses)
+    - [MsgRemoveCircuitUploadParamsAddressesResponse](#cosmwasm.wasm.v1.MsgRemoveCircuitUploadParamsAddressesResponse)
     - [MsgRemoveCodeUploadParamsAddresses](#cosmwasm.wasm.v1.MsgRemoveCodeUploadParamsAddresses)
     - [MsgRemoveCodeUploadParamsAddressesResponse](#cosmwasm.wasm.v1.MsgRemoveCodeUploadParamsAddressesResponse)
     - [MsgStoreAndInstantiateContract](#cosmwasm.wasm.v1.MsgStoreAndInstantiateContract)
     - [MsgStoreAndInstantiateContractResponse](#cosmwasm.wasm.v1.MsgStoreAndInstantiateContractResponse)
     - [MsgStoreAndMigrateContract](#cosmwasm.wasm.v1.MsgStoreAndMigrateContract)
     - [MsgStoreAndMigrateContractResponse](#cosmwasm.wasm.v1.MsgStoreAndMigrateContractResponse)
+    - [MsgStoreCircuit](#cosmwasm.wasm.v1.MsgStoreCircuit)
+    - [MsgStoreCircuitResponse](#cosmwasm.wasm.v1.MsgStoreCircuitResponse)
     - [MsgStoreCode](#cosmwasm.wasm.v1.MsgStoreCode)
     - [MsgStoreCodeResponse](#cosmwasm.wasm.v1.MsgStoreCodeResponse)
-    - [MsgStoreCodeWithVk](#cosmwasm.wasm.v1.MsgStoreCodeWithVk)
-    - [MsgStoreCodeWithVkResponse](#cosmwasm.wasm.v1.MsgStoreCodeWithVkResponse)
+    - [MsgStoreCodeWithCircuit](#cosmwasm.wasm.v1.MsgStoreCodeWithCircuit)
+    - [MsgStoreCodeWithCircuitResponse](#cosmwasm.wasm.v1.MsgStoreCodeWithCircuitResponse)
     - [MsgSudoContract](#cosmwasm.wasm.v1.MsgSudoContract)
     - [MsgSudoContractResponse](#cosmwasm.wasm.v1.MsgSudoContractResponse)
+    - [MsgUnpinCircuits](#cosmwasm.wasm.v1.MsgUnpinCircuits)
+    - [MsgUnpinCircuitsResponse](#cosmwasm.wasm.v1.MsgUnpinCircuitsResponse)
     - [MsgUnpinCodes](#cosmwasm.wasm.v1.MsgUnpinCodes)
     - [MsgUnpinCodesResponse](#cosmwasm.wasm.v1.MsgUnpinCodesResponse)
     - [MsgUpdateAdmin](#cosmwasm.wasm.v1.MsgUpdateAdmin)
@@ -183,6 +202,26 @@ AccessTypeParam
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
 | `value` | [AccessType](#cosmwasm.wasm.v1.AccessType) |  |  |
+
+
+
+
+
+
+<a name="cosmwasm.wasm.v1.CircuitInfo"></a>
+
+### CircuitInfo
+CodeInfo is data for the uploaded contract WASM code
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| `circuit_hash` | [bytes](#bytes) |  | CodeHash is the unique identifier created by wasmvm |
+| `creator` | [string](#string) |  | Creator address who initially stored the code |
+| `instantiate_config` | [AccessConfig](#cosmwasm.wasm.v1.AccessConfig) |  | InstantiateConfig access control to apply on contract creation, optional |
+| `i` | [uint64](#uint64) |  | i: instances required during proof verification |
+| `vkp_len` | [uint64](#uint64) |  | vkp_len - number of bytes representing vk_params |
+| `vk_len` | [uint64](#uint64) |  | vk_len - number of bytes representing vk_len |
 
 
 
@@ -272,6 +311,7 @@ Params defines the set of wasm parameters.
 | ----- | ---- | ----- | ----------- |
 | `code_upload_access` | [AccessConfig](#cosmwasm.wasm.v1.AccessConfig) |  |  |
 | `instantiate_default_permission` | [AccessType](#cosmwasm.wasm.v1.AccessType) |  |  |
+| `circuit_upload_access` | [AccessConfig](#cosmwasm.wasm.v1.AccessConfig) |  |  |
 
 
 
@@ -516,6 +556,24 @@ Since: wasmd 0.42
 
 
 
+<a name="cosmwasm.wasm.v1.Circuit"></a>
+
+### Circuit
+Circuit struct encompasses CodeInfo and CircuitBinary
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| `zk_id` | [uint64](#uint64) |  |  |
+| `zk_info` | [CircuitInfo](#cosmwasm.wasm.v1.CircuitInfo) |  |  |
+| `zk_bytes` | [bytes](#bytes) |  |  |
+| `pinned` | [bool](#bool) |  | Pinned to wasmvm cache |
+
+
+
+
+
+
 <a name="cosmwasm.wasm.v1.Code"></a>
 
 ### Code
@@ -564,6 +622,7 @@ GenesisState - genesis state of x/wasm
 | `codes` | [Code](#cosmwasm.wasm.v1.Code) | repeated |  |
 | `contracts` | [Contract](#cosmwasm.wasm.v1.Contract) | repeated |  |
 | `sequences` | [Sequence](#cosmwasm.wasm.v1.Sequence) | repeated |  |
+| `circuits` | [Circuit](#cosmwasm.wasm.v1.Circuit) | repeated |  |
 
 
 
@@ -986,6 +1045,24 @@ the x/gov module via a v1 governance proposal.
 
 
 
+<a name="cosmwasm.wasm.v1.CircuitInfoResponse"></a>
+
+### CircuitInfoResponse
+CodeInfoResponse contains code meta data from CodeInfo
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| `zk_id` | [uint64](#uint64) |  | id for legacy support |
+| `creator` | [string](#string) |  |  |
+| `data_hash` | [bytes](#bytes) |  |  |
+| `instantiate_permission` | [AccessConfig](#cosmwasm.wasm.v1.AccessConfig) |  |  |
+
+
+
+
+
+
 <a name="cosmwasm.wasm.v1.CodeInfoResponse"></a>
 
 ### CodeInfoResponse
@@ -1067,6 +1144,72 @@ method.
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
 | `address` | [string](#string) |  | Address is the contract address |
+
+
+
+
+
+
+<a name="cosmwasm.wasm.v1.QueryCircuitInfoRequest"></a>
+
+### QueryCircuitInfoRequest
+QueryCircuitInfoRequest is the request type for the Query/CircuitINfo RPC
+method
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| `zk_id` | [uint64](#uint64) |  | grpc-gateway_out does not support Go style ZkID |
+
+
+
+
+
+
+<a name="cosmwasm.wasm.v1.QueryCircuitInfoResponse"></a>
+
+### QueryCircuitInfoResponse
+QueryCircuitInfoResponse is the response type for the Query/CircuitInfo RPC
+method
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| `zk_id` | [uint64](#uint64) |  |  |
+| `creator` | [string](#string) |  |  |
+| `checksum` | [bytes](#bytes) |  |  |
+| `instantiate_permission` | [AccessConfig](#cosmwasm.wasm.v1.AccessConfig) |  |  |
+
+
+
+
+
+
+<a name="cosmwasm.wasm.v1.QueryCircuitRequest"></a>
+
+### QueryCircuitRequest
+QueryCircuitRequest is the request type for the Query/Circuit RPC method
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| `zk_id` | [uint64](#uint64) |  | grpc-gateway_out does not support Go style ZkID |
+
+
+
+
+
+
+<a name="cosmwasm.wasm.v1.QueryCircuitResponse"></a>
+
+### QueryCircuitResponse
+QueryCircuitResponse is the response type for the Query/Code RPC method
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| `circuit_info` | [CircuitInfoResponse](#cosmwasm.wasm.v1.CircuitInfoResponse) |  |  |
+| `data` | [bytes](#bytes) |  |  |
 
 
 
@@ -1328,6 +1471,39 @@ QueryParamsResponse is the response type for the Query/Params RPC method.
 
 
 
+<a name="cosmwasm.wasm.v1.QueryPinnedCircuitsRequest"></a>
+
+### QueryPinnedCircuitsRequest
+QueryPinnedCircuitsRequest is the request type for the Query/PinnedCircuits
+RPC method
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| `pagination` | [cosmos.base.query.v1beta1.PageRequest](#cosmos.base.query.v1beta1.PageRequest) |  | pagination defines an optional pagination for the request. |
+
+
+
+
+
+
+<a name="cosmwasm.wasm.v1.QueryPinnedCircuitsResponse"></a>
+
+### QueryPinnedCircuitsResponse
+QueryPinnedCircuitsResponse is the response type for the
+Query/PinnedCircuits RPC method
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| `zk_ids` | [uint64](#uint64) | repeated |  |
+| `pagination` | [cosmos.base.query.v1beta1.PageResponse](#cosmos.base.query.v1beta1.PageResponse) |  | pagination defines the pagination in the response. |
+
+
+
+
+
+
 <a name="cosmwasm.wasm.v1.QueryPinnedCodesRequest"></a>
 
 ### QueryPinnedCodesRequest
@@ -1475,9 +1651,12 @@ Query provides defines the gRPC querier service
 | `RawContractState` | [QueryRawContractStateRequest](#cosmwasm.wasm.v1.QueryRawContractStateRequest) | [QueryRawContractStateResponse](#cosmwasm.wasm.v1.QueryRawContractStateResponse) | RawContractState gets single key from the raw store data of a contract | GET|/cosmwasm/wasm/v1/contract/{address}/raw/{query_data}|
 | `SmartContractState` | [QuerySmartContractStateRequest](#cosmwasm.wasm.v1.QuerySmartContractStateRequest) | [QuerySmartContractStateResponse](#cosmwasm.wasm.v1.QuerySmartContractStateResponse) | SmartContractState get smart query result from the contract | GET|/cosmwasm/wasm/v1/contract/{address}/smart/{query_data}|
 | `Code` | [QueryCodeRequest](#cosmwasm.wasm.v1.QueryCodeRequest) | [QueryCodeResponse](#cosmwasm.wasm.v1.QueryCodeResponse) | Code gets the binary code and metadata for a single wasm code | GET|/cosmwasm/wasm/v1/code/{code_id}|
+| `Circuit` | [QueryCircuitRequest](#cosmwasm.wasm.v1.QueryCircuitRequest) | [QueryCircuitResponse](#cosmwasm.wasm.v1.QueryCircuitResponse) | Circuit gets the binary vk and metadata footer binary for a single circuit | GET|/cosmwasm/wasm/v1/circuit/{zk_id}|
 | `Codes` | [QueryCodesRequest](#cosmwasm.wasm.v1.QueryCodesRequest) | [QueryCodesResponse](#cosmwasm.wasm.v1.QueryCodesResponse) | Codes gets the metadata for all stored wasm codes | GET|/cosmwasm/wasm/v1/code|
 | `CodeInfo` | [QueryCodeInfoRequest](#cosmwasm.wasm.v1.QueryCodeInfoRequest) | [QueryCodeInfoResponse](#cosmwasm.wasm.v1.QueryCodeInfoResponse) | CodeInfo gets the metadata for a single wasm code | GET|/cosmwasm/wasm/v1/code-info/{code_id}|
+| `CircuitInfo` | [QueryCircuitInfoRequest](#cosmwasm.wasm.v1.QueryCircuitInfoRequest) | [QueryCircuitInfoResponse](#cosmwasm.wasm.v1.QueryCircuitInfoResponse) | CircuitInfo gets the circuit meta data | GET|/cosmwasm/wasm/v1/circuit-info/{zk_id}|
 | `PinnedCodes` | [QueryPinnedCodesRequest](#cosmwasm.wasm.v1.QueryPinnedCodesRequest) | [QueryPinnedCodesResponse](#cosmwasm.wasm.v1.QueryPinnedCodesResponse) | PinnedCodes gets the pinned code ids | GET|/cosmwasm/wasm/v1/codes/pinned|
+| `PinnedCircuits` | [QueryPinnedCircuitsRequest](#cosmwasm.wasm.v1.QueryPinnedCircuitsRequest) | [QueryPinnedCircuitsResponse](#cosmwasm.wasm.v1.QueryPinnedCircuitsResponse) | PinnedCircuits gets the pinned code ids | GET|/cosmwasm/wasm/v1/circuits/pinned|
 | `Params` | [QueryParamsRequest](#cosmwasm.wasm.v1.QueryParamsRequest) | [QueryParamsResponse](#cosmwasm.wasm.v1.QueryParamsResponse) | Params gets the module params | GET|/cosmwasm/wasm/v1/codes/params|
 | `ContractsByCreator` | [QueryContractsByCreatorRequest](#cosmwasm.wasm.v1.QueryContractsByCreatorRequest) | [QueryContractsByCreatorResponse](#cosmwasm.wasm.v1.QueryContractsByCreatorResponse) | ContractsByCreator gets the contracts by creator | GET|/cosmwasm/wasm/v1/contracts/creator/{creator_address}|
 | `WasmLimitsConfig` | [QueryWasmLimitsConfigRequest](#cosmwasm.wasm.v1.QueryWasmLimitsConfigRequest) | [QueryWasmLimitsConfigResponse](#cosmwasm.wasm.v1.QueryWasmLimitsConfigResponse) | WasmLimitsConfig gets the configured limits for static validation of Wasm files, encoded in JSON. | GET|/cosmwasm/wasm/v1/wasm-limits-config|
@@ -1491,6 +1670,34 @@ Query provides defines the gRPC querier service
 <p align="right"><a href="#top">Top</a></p>
 
 ## cosmwasm/wasm/v1/tx.proto
+
+
+
+<a name="cosmwasm.wasm.v1.MsgAddCircuitUploadParamsAddresses"></a>
+
+### MsgAddCircuitUploadParamsAddresses
+MsgAddCircuitUploadParamsAddresses is the
+MsgAddCircuitUploadParamsAddresses request type.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| `authority` | [string](#string) |  | Authority is the address of the governance account. |
+| `addresses` | [string](#string) | repeated |  |
+
+
+
+
+
+
+<a name="cosmwasm.wasm.v1.MsgAddCircuitUploadParamsAddressesResponse"></a>
+
+### MsgAddCircuitUploadParamsAddressesResponse
+MsgAddCircuitUploadParamsAddressesResponse defines the response
+structure for executing a MsgAddCircuitUploadParamsAddresses message.
+
+
+
 
 
 
@@ -1690,6 +1897,33 @@ MsgMigrateContractResponse returns contract migration result data.
 
 
 
+<a name="cosmwasm.wasm.v1.MsgPinCircuits"></a>
+
+### MsgPinCircuits
+MsgPinCircuits is the MsgPinCodes request type for circuits.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| `authority` | [string](#string) |  | Authority is the address of the governance account. |
+| `zk_ids` | [uint64](#uint64) | repeated | ZkIDs references the new circuit binary files |
+
+
+
+
+
+
+<a name="cosmwasm.wasm.v1.MsgPinCircuitsResponse"></a>
+
+### MsgPinCircuitsResponse
+MsgPinCircuitsResponse defines the response structure for executing a
+MsgPinCircuits message.
+
+
+
+
+
+
 <a name="cosmwasm.wasm.v1.MsgPinCodes"></a>
 
 ### MsgPinCodes
@@ -1715,6 +1949,34 @@ MsgPinCodesResponse defines the response structure for executing a
 MsgPinCodes message.
 
 Since: 0.40
+
+
+
+
+
+
+<a name="cosmwasm.wasm.v1.MsgRemoveCircuitUploadParamsAddresses"></a>
+
+### MsgRemoveCircuitUploadParamsAddresses
+MsgRemoveCircuitUploadParamsAddresses is the
+MsgRemoveCircuitUploadParamsAddresses request type.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| `authority` | [string](#string) |  | Authority is the address of the governance account. |
+| `addresses` | [string](#string) | repeated |  |
+
+
+
+
+
+
+<a name="cosmwasm.wasm.v1.MsgRemoveCircuitUploadParamsAddressesResponse"></a>
+
+### MsgRemoveCircuitUploadParamsAddressesResponse
+MsgRemoveCircuitUploadParamsAddressesResponse defines the response
+structure for executing a MsgRemoveCircuitUploadParamsAddresses message.
 
 
 
@@ -1838,6 +2100,39 @@ Since: 0.42
 
 
 
+<a name="cosmwasm.wasm.v1.MsgStoreCircuit"></a>
+
+### MsgStoreCircuit
+MsgStoreCircuit submit Circuit code to the system
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| `sender` | [string](#string) |  | Sender is the actor that signed the messages |
+| `circuit_binary` | [bytes](#bytes) |  | CircuitBinaryFile can be raw or gzip compressed |
+| `instantiate_permission` | [AccessConfig](#cosmwasm.wasm.v1.AccessConfig) |  | InstantiatePermission access control to apply on contract creation, (anyone, these-people, only me) optional |
+
+
+
+
+
+
+<a name="cosmwasm.wasm.v1.MsgStoreCircuitResponse"></a>
+
+### MsgStoreCircuitResponse
+MsgStoreCircuitResponse returns store result data.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| `zk_id` | [uint64](#uint64) |  | CodeID is the reference to the stored WASM code |
+| `checksum` | [bytes](#bytes) |  | Checksum is the sha256 hash of the stored code |
+
+
+
+
+
+
 <a name="cosmwasm.wasm.v1.MsgStoreCode"></a>
 
 ### MsgStoreCode
@@ -1871,16 +2166,18 @@ MsgStoreCodeResponse returns store result data.
 
 
 
-<a name="cosmwasm.wasm.v1.MsgStoreCodeWithVk"></a>
+<a name="cosmwasm.wasm.v1.MsgStoreCodeWithCircuit"></a>
 
-### MsgStoreCodeWithVk
-MsgStoreCode submit Wasm code to the system
+### MsgStoreCodeWithCircuit
+MsgStoreCodeWithCircuit submit Wasm code to the system with bytes of a
+circuit
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
 | `sender` | [string](#string) |  | Sender is the actor that signed the messages |
-| `blobs` | [bytes](#bytes) | repeated | [0-cosmwasm,1-halo2-vk] |
+| `wasm_byte_code` | [bytes](#bytes) |  | [0-cosmwasm,1-halo2-vk] |
+| `vk_byte_code` | [bytes](#bytes) |  |  |
 | `instantiate_permission` | [AccessConfig](#cosmwasm.wasm.v1.AccessConfig) |  | InstantiatePermission access control to apply on contract creation, optional |
 
 
@@ -1888,16 +2185,15 @@ MsgStoreCode submit Wasm code to the system
 
 
 
-<a name="cosmwasm.wasm.v1.MsgStoreCodeWithVkResponse"></a>
+<a name="cosmwasm.wasm.v1.MsgStoreCodeWithCircuitResponse"></a>
 
-### MsgStoreCodeWithVkResponse
+### MsgStoreCodeWithCircuitResponse
 MsgStoreCodeResponse returns store result data.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| `code_id` | [uint64](#uint64) |  | CodeID is the reference to the stored WASM code |
-| `checksums` | [bytes](#bytes) | repeated | Checksum is the sha256 hashes of the stored code & vk [0] - cosmwasm , [1] - vk |
+| `res` | [MsgStoreCodeResponse](#cosmwasm.wasm.v1.MsgStoreCodeResponse) | repeated | [0] - cosmwasm , [1] - vk |
 
 
 
@@ -1935,6 +2231,37 @@ Since: 0.40
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
 | `data` | [bytes](#bytes) |  | Data contains bytes to returned from the contract |
+
+
+
+
+
+
+<a name="cosmwasm.wasm.v1.MsgUnpinCircuits"></a>
+
+### MsgUnpinCircuits
+MsgUnpinCircuits is the MsgUnpinCodes request type for zk-circuits.
+
+Since: 0.62
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| `authority` | [string](#string) |  | Authority is the address of the governance account. |
+| `zk_ids` | [uint64](#uint64) | repeated | ZkID references the zk-circuit codes |
+
+
+
+
+
+
+<a name="cosmwasm.wasm.v1.MsgUnpinCircuitsResponse"></a>
+
+### MsgUnpinCircuitsResponse
+MsgUnpinCircuitsResponse defines the response structure for executing a
+MsgUnpinCircuits message.
+
+Since: 0.40
 
 
 
@@ -2100,7 +2427,8 @@ Msg defines the wasm Msg service.
 | Method Name | Request Type | Response Type | Description | HTTP Verb | Endpoint |
 | ----------- | ------------ | ------------- | ------------| ------- | -------- |
 | `StoreCode` | [MsgStoreCode](#cosmwasm.wasm.v1.MsgStoreCode) | [MsgStoreCodeResponse](#cosmwasm.wasm.v1.MsgStoreCodeResponse) | StoreCode to submit Wasm code to the system | |
-| `StoreCodeWithVk` | [MsgStoreCodeWithVk](#cosmwasm.wasm.v1.MsgStoreCodeWithVk) | [MsgStoreCodeWithVkResponse](#cosmwasm.wasm.v1.MsgStoreCodeWithVkResponse) | StoreCode to submit Wasm code to the system, along with an Halo2 Verifying Key | |
+| `StoreCircuit` | [MsgStoreCircuit](#cosmwasm.wasm.v1.MsgStoreCircuit) | [MsgStoreCircuitResponse](#cosmwasm.wasm.v1.MsgStoreCircuitResponse) | StoreCode to submit Wasm code to the system | |
+| `StoreCodeWithCircuit` | [MsgStoreCodeWithCircuit](#cosmwasm.wasm.v1.MsgStoreCodeWithCircuit) | [MsgStoreCodeWithCircuitResponse](#cosmwasm.wasm.v1.MsgStoreCodeWithCircuitResponse) | StoreCode to submit Wasm code to the system, along with an Halo2 Verifying Key | |
 | `InstantiateContract` | [MsgInstantiateContract](#cosmwasm.wasm.v1.MsgInstantiateContract) | [MsgInstantiateContractResponse](#cosmwasm.wasm.v1.MsgInstantiateContractResponse) | InstantiateContract creates a new smart contract instance for the given code id. | |
 | `InstantiateContract2` | [MsgInstantiateContract2](#cosmwasm.wasm.v1.MsgInstantiateContract2) | [MsgInstantiateContract2Response](#cosmwasm.wasm.v1.MsgInstantiateContract2Response) | InstantiateContract2 creates a new smart contract instance for the given code id with a predictable address | |
 | `ExecuteContract` | [MsgExecuteContract](#cosmwasm.wasm.v1.MsgExecuteContract) | [MsgExecuteContractResponse](#cosmwasm.wasm.v1.MsgExecuteContractResponse) | Execute submits the given message data to a smart contract | |
@@ -2120,11 +2448,14 @@ Since: 0.40 | |
 | `UnpinCodes` | [MsgUnpinCodes](#cosmwasm.wasm.v1.MsgUnpinCodes) | [MsgUnpinCodesResponse](#cosmwasm.wasm.v1.MsgUnpinCodesResponse) | UnpinCodes defines a governance operation for unpinning a set of code ids in the wasmvm cache. The authority is defined in the keeper.
 
 Since: 0.40 | |
+| `UnpinCircuits` | [MsgUnpinCircuits](#cosmwasm.wasm.v1.MsgUnpinCircuits) | [MsgUnpinCircuitsResponse](#cosmwasm.wasm.v1.MsgUnpinCircuitsResponse) | UnpinCircuits defines a governance operation for unpinning a set of zk-IDs in the zk-wasmvm cache. The authority is defined in the keeper. | |
 | `StoreAndInstantiateContract` | [MsgStoreAndInstantiateContract](#cosmwasm.wasm.v1.MsgStoreAndInstantiateContract) | [MsgStoreAndInstantiateContractResponse](#cosmwasm.wasm.v1.MsgStoreAndInstantiateContractResponse) | StoreAndInstantiateContract defines a governance operation for storing and instantiating the contract. The authority is defined in the keeper.
 
 Since: 0.40 | |
 | `RemoveCodeUploadParamsAddresses` | [MsgRemoveCodeUploadParamsAddresses](#cosmwasm.wasm.v1.MsgRemoveCodeUploadParamsAddresses) | [MsgRemoveCodeUploadParamsAddressesResponse](#cosmwasm.wasm.v1.MsgRemoveCodeUploadParamsAddressesResponse) | RemoveCodeUploadParamsAddresses defines a governance operation for removing addresses from code upload params. The authority is defined in the keeper. | |
+| `RemoveCircuitUploadParamsAddresses` | [MsgRemoveCircuitUploadParamsAddresses](#cosmwasm.wasm.v1.MsgRemoveCircuitUploadParamsAddresses) | [MsgRemoveCircuitUploadParamsAddressesResponse](#cosmwasm.wasm.v1.MsgRemoveCircuitUploadParamsAddressesResponse) | RemoveCodeUploadParamsAddresses defines a governance operation for removing addresses from circuit upload params | |
 | `AddCodeUploadParamsAddresses` | [MsgAddCodeUploadParamsAddresses](#cosmwasm.wasm.v1.MsgAddCodeUploadParamsAddresses) | [MsgAddCodeUploadParamsAddressesResponse](#cosmwasm.wasm.v1.MsgAddCodeUploadParamsAddressesResponse) | AddCodeUploadParamsAddresses defines a governance operation for adding addresses to code upload params. The authority is defined in the keeper. | |
+| `AddCircuitUploadParamsAddresses` | [MsgAddCircuitUploadParamsAddresses](#cosmwasm.wasm.v1.MsgAddCircuitUploadParamsAddresses) | [MsgAddCircuitUploadParamsAddressesResponse](#cosmwasm.wasm.v1.MsgAddCircuitUploadParamsAddressesResponse) | AddCircuitUploadParamsAddresses defines a governance operation for adding addresses to circuit upload params. The authority is defined in the keeper. | |
 | `StoreAndMigrateContract` | [MsgStoreAndMigrateContract](#cosmwasm.wasm.v1.MsgStoreAndMigrateContract) | [MsgStoreAndMigrateContractResponse](#cosmwasm.wasm.v1.MsgStoreAndMigrateContractResponse) | StoreAndMigrateContract defines a governance operation for storing and migrating the contract. The authority is defined in the keeper.
 
 Since: 0.42 | |
