@@ -28,6 +28,7 @@ type WasmEngine interface {
 	// Returns both the checksum, as well as the gas cost of compilation (in CosmWasm Gas) or an error.
 	StoreCodeWithCircuit(code wasmvm.WasmCode, vk wasmvm.CircuitBinary, gasLimit uint64) ([]wasmvm.Checksum, uint64, error)
 	SimulateStoreCodeWithCircuit(code wasmvm.WasmCode, vk wasmvm.CircuitBinary, gasLimit uint64) ([]wasmvm.Checksum, uint64, error)
+	SimulateStoreCircuit(vk wasmvm.CircuitBinary, gasLimit uint64) (wasmvm.Checksum, uint64, error)
 	// StoreCodeUnchecked will compile the wasm code, and store the resulting pre-compile
 	// as well as the original code. Both can be referenced later via checksum
 	// This must be done one time for given code, after which it can be

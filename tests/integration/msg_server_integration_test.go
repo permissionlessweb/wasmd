@@ -76,6 +76,7 @@ func TestUpdateParams(t *testing.T) {
 				Params: types.Params{
 					CodeUploadAccess:             types.AllowNobody,
 					InstantiateDefaultPermission: types.AccessTypeEverybody,
+					CircuitUploadAccess:          types.AllowNobody,
 				},
 			},
 			expUploadConfig:    types.AllowNobody,
@@ -87,6 +88,7 @@ func TestUpdateParams(t *testing.T) {
 				Params: types.Params{
 					CodeUploadAccess:             types.AllowEverybody,
 					InstantiateDefaultPermission: types.AccessTypeEverybody,
+					CircuitUploadAccess:          types.AllowEverybody,
 				},
 			},
 			expUploadConfig:    types.AllowEverybody,
@@ -98,6 +100,7 @@ func TestUpdateParams(t *testing.T) {
 				Params: types.Params{
 					CodeUploadAccess:             oneAddressAccessConfig,
 					InstantiateDefaultPermission: types.AccessTypeEverybody,
+					CircuitUploadAccess:          oneAddressAccessConfig,
 				},
 			},
 			expUploadConfig:    oneAddressAccessConfig,
@@ -109,6 +112,7 @@ func TestUpdateParams(t *testing.T) {
 				Params: types.Params{
 					CodeUploadAccess:             types.AllowEverybody,
 					InstantiateDefaultPermission: types.AccessTypeNobody,
+					CircuitUploadAccess:          types.AllowEverybody,
 				},
 			},
 			expUploadConfig:    types.AllowEverybody,
@@ -120,6 +124,7 @@ func TestUpdateParams(t *testing.T) {
 				Params: types.Params{
 					CodeUploadAccess:             types.AllowEverybody,
 					InstantiateDefaultPermission: types.AccessTypeEverybody,
+					CircuitUploadAccess:          types.AllowEverybody,
 				},
 			},
 			expUploadConfig:    types.AllowEverybody,

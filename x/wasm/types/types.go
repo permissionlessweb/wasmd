@@ -72,10 +72,10 @@ func NewCodeInfo(codeHash []byte, creator sdk.AccAddress, instantiatePermission 
 	}
 }
 
-// NewCodeInfo fills a new CodeInfo struct
-func NewCircuitInfo(codeHash []byte, creator sdk.AccAddress, instantiatePermission AccessConfig) CodeInfo {
-	return CodeInfo{
-		CodeHash:          codeHash,
+// NewCircuitInfo fills a new CircuitInfo struct
+func NewCircuitInfo(circuitHash []byte, creator sdk.AccAddress, instantiatePermission AccessConfig) CircuitInfo {
+	return CircuitInfo{
+		CircuitHash:       circuitHash,
 		Creator:           creator.String(),
 		InstantiateConfig: instantiatePermission,
 	}

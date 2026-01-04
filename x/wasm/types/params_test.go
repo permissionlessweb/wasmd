@@ -31,29 +31,34 @@ func TestValidateParams(t *testing.T) {
 			src: Params{
 				CodeUploadAccess:             AllowNobody,
 				InstantiateDefaultPermission: AccessTypeNobody,
+				CircuitUploadAccess:          AllowNobody,
 			},
 		},
 		"all good with everybody": {
 			src: Params{
 				CodeUploadAccess:             AllowEverybody,
 				InstantiateDefaultPermission: AccessTypeEverybody,
+				CircuitUploadAccess:          AllowEverybody,
 			},
 		},
 		"all good with anyOf address": {
 			src: Params{
 				CodeUploadAccess:             AccessTypeAnyOfAddresses.With(anyAddress),
 				InstantiateDefaultPermission: AccessTypeAnyOfAddresses,
+				CircuitUploadAccess:          AccessTypeAnyOfAddresses.With(anyAddress),
 			},
 		},
 		"all good with anyOf addresses": {
 			src: Params{
 				CodeUploadAccess:             AccessTypeAnyOfAddresses.With(anyAddress, otherAddress),
 				InstantiateDefaultPermission: AccessTypeAnyOfAddresses,
+				CircuitUploadAccess:          AccessTypeAnyOfAddresses.With(anyAddress, otherAddress),
 			},
 		},
 		"reject empty type in instantiate permission": {
 			src: Params{
-				CodeUploadAccess: AllowNobody,
+				CodeUploadAccess:    AllowNobody,
+				CircuitUploadAccess: AllowEverybody,
 			},
 			expErr: true,
 		},
@@ -67,6 +72,13 @@ func TestValidateParams(t *testing.T) {
 		"reject empty CodeUploadAccess": {
 			src: Params{
 				InstantiateDefaultPermission: AccessTypeAnyOfAddresses,
+				CircuitUploadAccess:          AllowEverybody,
+			},
+			expErr: true,
+		},
+		"reject empty CircuitUploadAccess": {
+			src: Params{
+				CodeUploadAccess: AllowEverybody, InstantiateDefaultPermission: AccessTypeAnyOfAddresses,
 			},
 			expErr: true,
 		},
@@ -77,10 +89,24 @@ func TestValidateParams(t *testing.T) {
 			},
 			expErr: true,
 		},
+		"reject undefined permission in CircuitUploadAccess": {
+			src: Params{
+				CodeUploadAccess: AllowEverybody, InstantiateDefaultPermission: AccessTypeAnyOfAddresses,
+				CircuitUploadAccess: AccessConfig{Permission: AccessTypeUnspecified},
+			},
+			expErr: true,
+		},
 		"reject empty addresses in any of addresses": {
 			src: Params{
 				CodeUploadAccess:             AccessConfig{Permission: AccessTypeAnyOfAddresses, Addresses: []string{}},
 				InstantiateDefaultPermission: AccessTypeAnyOfAddresses,
+			},
+			expErr: true,
+		},
+		"reject empty addresses in circuit any of addresses": {
+			src: Params{
+				CodeUploadAccess: AllowEverybody, InstantiateDefaultPermission: AccessTypeAnyOfAddresses,
+				CircuitUploadAccess: AccessConfig{Permission: AccessTypeAnyOfAddresses, Addresses: []string{}},
 			},
 			expErr: true,
 		},
@@ -91,6 +117,13 @@ func TestValidateParams(t *testing.T) {
 			},
 			expErr: true,
 		},
+		"reject addresses not set in circuit any of addresses": {
+			src: Params{
+				CodeUploadAccess: AllowEverybody, InstantiateDefaultPermission: AccessTypeAnyOfAddresses,
+				CircuitUploadAccess: AccessConfig{Permission: AccessTypeAnyOfAddresses},
+			},
+			expErr: true,
+		},
 		"reject invalid address in any of addresses": {
 			src: Params{
 				CodeUploadAccess:             AccessConfig{Permission: AccessTypeAnyOfAddresses, Addresses: []string{invalidAddress}},
@@ -98,10 +131,24 @@ func TestValidateParams(t *testing.T) {
 			},
 			expErr: true,
 		},
+		"reject invalid address in circuit any of addresses": {
+			src: Params{
+				CodeUploadAccess: AllowEverybody, InstantiateDefaultPermission: AccessTypeAnyOfAddresses,
+				CircuitUploadAccess: AccessConfig{Permission: AccessTypeAnyOfAddresses, Addresses: []string{invalidAddress}},
+			},
+			expErr: true,
+		},
 		"reject duplicate address in any of addresses": {
 			src: Params{
 				CodeUploadAccess:             AccessConfig{Permission: AccessTypeAnyOfAddresses, Addresses: []string{anyAddress.String(), anyAddress.String()}},
 				InstantiateDefaultPermission: AccessTypeAnyOfAddresses,
+			},
+			expErr: true,
+		},
+		"reject duplicate address in circuit any of addresses": {
+			src: Params{
+				CodeUploadAccess: AllowEverybody, InstantiateDefaultPermission: AccessTypeAnyOfAddresses,
+				CircuitUploadAccess: AccessConfig{Permission: AccessTypeAnyOfAddresses, Addresses: []string{anyAddress.String(), anyAddress.String()}},
 			},
 			expErr: true,
 		},
@@ -166,7 +213,8 @@ func TestParamsUnmarshalJson(t *testing.T) {
 	}{
 		"defaults": {
 			src: `{"code_upload_access": {"permission": "Everybody"},
-				"instantiate_default_permission": "Everybody"}`,
+				"instantiate_default_permission": "Everybody",
+				"circuit_upload_access": {"permission": "Everybody"}}`,
 			exp: DefaultParams(),
 		},
 	}

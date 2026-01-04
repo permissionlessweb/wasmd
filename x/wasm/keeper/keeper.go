@@ -154,9 +154,9 @@ func (k Keeper) GetGasRegister() types.GasRegister {
 	return k.gasRegister
 }
 
-func (k Keeper) create_with_circuit(ctx context.Context, creator sdk.AccAddress, wasmCode, vkCode []byte, instantiateAccess *types.AccessConfig, authZ types.AuthorizationPolicy) (codeID uint64, checksums [][]byte, err error) {
+func (k Keeper) create_with_circuit(ctx context.Context, creator sdk.AccAddress, wasmCode, vkCode []byte, instantiateAccess *types.AccessConfig, authZ types.AuthorizationPolicy) (codeID uint64, zkID uint64, checksums [][]byte, err error) {
 	if creator == nil {
-		return 0, checksums, errorsmod.Wrap(sdkerrors.ErrInvalidAddress, "cannot be nil")
+		return 0, 0, nil, errorsmod.Wrap(sdkerrors.ErrInvalidAddress, "cannot be nil")
 	}
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	// figure out proper instantiate access
@@ -170,84 +170,132 @@ func (k Keeper) create_with_circuit(ctx context.Context, creator sdk.AccAddress,
 	}
 
 	if !authZ.CanCreateCode(chainConfigs, creator, *instantiateAccess) {
-		return 0, checksums, errorsmod.Wrap(sdkerrors.ErrUnauthorized, "can not create code")
+		return 0, 0, nil, errorsmod.Wrap(sdkerrors.ErrUnauthorized, "can not create code")
 	}
 
 	if ioutils.IsGzip(wasmCode) {
 		sdkCtx.GasMeter().ConsumeGas(k.gasRegister.UncompressCosts(len(wasmCode)), "Uncompress gzip bytecode")
 		wasmCode, err = ioutils.Uncompress(wasmCode, int64(types.MaxWasmSize))
 		if err != nil {
-			return 0, checksums, types.ErrCreateFailed.Wrap(errorsmod.Wrap(err, "uncompress wasm archive").Error())
+			return 0, 0, nil, types.ErrCreateFailed.Wrap(errorsmod.Wrap(err, "uncompress wasm archive").Error())
 		}
 	}
 
 	gasLeft := k.runtimeGasForContract(sdkCtx)
-	var gasUsed uint64
+	var gasUsed, totalGasUsed uint64
 	isSimulation := sdkCtx.ExecMode() == sdk.ExecModeSimulate
 	var vmChecksums []wasmvm.Checksum
+
+	// Store WASM and Circuit separately to avoid FFI issues with combined call
+	// Step 1: Store WASM code
+	var wasmChecksum wasmvm.Checksum
 	if isSimulation {
-		// only simulate storing the code, no files are written
-		vmChecksums, gasUsed, err = k.wasmVM.SimulateStoreCodeWithCircuit(wasmCode, vkCode, gasLeft)
+		wasmChecksum, gasUsed, err = k.wasmVM.SimulateStoreCode(wasmCode, gasLeft)
 	} else {
-		vmChecksums, gasUsed, err = k.wasmVM.StoreCodeWithCircuit(wasmCode, vkCode, gasLeft)
+		wasmChecksum, gasUsed, err = k.wasmVM.StoreCode(wasmCode, gasLeft)
+	}
+	totalGasUsed += gasUsed
+	if err != nil {
+		k.consumeRuntimeGas(sdkCtx, totalGasUsed)
+		return 0, 0, nil, errorsmod.Wrap(types.ErrCreateFailed, err.Error())
 	}
 
-	k.consumeRuntimeGas(sdkCtx, gasUsed)
-	if err != nil {
-		return 0, checksums, errorsmod.Wrap(types.ErrCreateFailed, err.Error())
+	// Step 2: Store Circuit (if provided)
+	var circuitChecksum wasmvm.Checksum
+	if vkCode != nil && len(vkCode) > 0 {
+		gasLeft = k.runtimeGasForContract(sdkCtx)
+		if isSimulation {
+			circuitChecksum, gasUsed, err = k.wasmVM.SimulateStoreCircuit(vkCode, gasLeft)
+		} else {
+			circuitChecksum, gasUsed, err = k.wasmVM.StoreCircuit(vkCode, gasLeft)
+		}
+		totalGasUsed += gasUsed
+		if err != nil {
+			k.consumeRuntimeGas(sdkCtx, totalGasUsed)
+			return 0, 0, nil, errorsmod.Wrap(types.ErrCreateFailed, err.Error())
+		}
+		vmChecksums = []wasmvm.Checksum{wasmChecksum, circuitChecksum}
+	} else {
+		// If no circuit provided, still return array but with empty second element
+		vmChecksums = []wasmvm.Checksum{wasmChecksum, wasmvm.Checksum(nil)}
+	}
+
+	k.consumeRuntimeGas(sdkCtx, totalGasUsed)
+
+	// Validate checksums - must have at least 2 checksums (wasm + circuit)
+	if len(vmChecksums) < 2 {
+		return 0, 0, nil, types.ErrCreateFailed.Wrap("expected 2 checksums (wasm + circuit), got " + string(rune(len(vmChecksums))))
 	}
 
 	// Convert checksums from wasmvm format
-	checksums = make([][]byte, len(vmChecksums))
-	for i, c := range vmChecksums {
-		checksums[i] = []byte(c)
+	checksums = make([][]byte, 2)
+	checksums[0] = []byte(vmChecksums[0]) // WASM checksum
+	checksums[1] = []byte(vmChecksums[1]) // Circuit checksum
+
+	// Validate checksum lengths
+	if len(checksums[0]) != 32 {
+		return 0, 0, nil, types.ErrCreateFailed.Wrap("invalid wasm checksum length: expected 32, got " + strconv.Itoa(len(checksums[0])))
+	}
+	if len(checksums[1]) == 0 {
+		return 0, 0, nil, types.ErrCreateFailed.Wrap("circuit checksum is empty")
+	}
+	if len(checksums[1]) != 32 {
+		return 0, 0, nil, types.ErrCreateFailed.Wrap("invalid circuit checksum length: expected 32, got " + strconv.Itoa(len(checksums[1])))
 	}
 
 	// simulation gets default value for capabilities
 	var requiredCapabilities string
 	if !isSimulation {
-		report, err := k.wasmVM.AnalyzeCode(checksums[0])
+		report, err := k.wasmVM.AnalyzeCode(wasmvmtypes.Checksum(checksums[0]))
 		if err != nil {
-			return 0, checksums, errorsmod.Wrap(types.ErrCreateFailed, err.Error())
+			return 0, 0, nil, errorsmod.Wrap(types.ErrCreateFailed, err.Error())
 		}
 		requiredCapabilities = report.RequiredCapabilities
 	}
 	codeID = k.mustAutoIncrementID(sdkCtx, types.KeySequenceCodeID)
-	zkID := k.mustAutoIncrementID(sdkCtx, types.KeySequenceCircuitID)
-	k.Logger(sdkCtx).Debug("storing new contract with vk", "capabilities", requiredCapabilities, "code_id", codeID, "zk_id", zkID)
+	zkIDUint32 := k.mustAutoIncrementIDUint32(sdkCtx, types.KeySequenceCircuitID)
+	k.Logger(sdkCtx).Debug("storing new contract with vk", "capabilities", requiredCapabilities, "code_id", codeID, "zk_id", zkIDUint32)
 	codeInfo := types.NewCodeInfo(checksums[0], creator, *instantiateAccess)
 	vkInfo := types.NewCircuitInfo(checksums[1], creator, *instantiateAccess)
 	k.mustStoreCodeInfo(sdkCtx, codeID, codeInfo)
-	k.mustStoreCircuitInfo(sdkCtx, zkID, vkInfo)
+	k.mustStoreCircuitInfo(sdkCtx, uint64(zkIDUint32), vkInfo)
+
+	// Store zkID→checksum mapping for Wasm contract access via resolve_zkid_to_checksum
+	// zkID is stored as u32 (4 bytes little-endian) for FFI compatibility
+	store := k.storeService.OpenKVStore(ctx)
+	zkidBytes := make([]byte, 4)
+	binary.LittleEndian.PutUint32(zkidBytes, zkIDUint32)
+	k.Logger(sdkCtx).Debug("storing zkid→checksum mapping (create_with_circuit)",
+		"zkid", zkIDUint32,
+		"zkid_bytes_hex", hex.EncodeToString(zkidBytes),
+		"checksum_hex", hex.EncodeToString(checksums[1]),
+	)
+	if err := store.Set(zkidBytes, checksums[1]); err != nil {
+		return 0, 0, nil, err
+	}
+
+	// Store circuit binary in app state for handler access during proof verification
+	// Handler retrieves VK bytes using: storage.get(&checksum)
+	if err := store.Set(checksums[1], vkCode); err != nil {
+		return 0, 0, nil, err
+	}
 
 	evt := sdk.NewEvent(
 		types.EventTypeStoreCode,
 		sdk.NewAttribute(types.AttributeKeyChecksum, hex.EncodeToString(checksums[0])),
-		sdk.NewAttribute(types.AttributeKeyVKChecksum, hex.EncodeToString(checksums[1])),
+		sdk.NewAttribute(types.AttributeKeyCircuitChecksum, hex.EncodeToString(checksums[1])),
 		sdk.NewAttribute(types.AttributeKeyCodeID, strconv.FormatUint(codeID, 10)),
-		sdk.NewAttribute(types.AttributeKeyZkID, strconv.FormatUint(zkID, 10)),
+		sdk.NewAttribute(types.AttributeKeyZkID, strconv.FormatUint(uint64(zkIDUint32), 10)),
 	)
 	for _, f := range strings.Split(requiredCapabilities, ",") {
 		evt.AppendAttributes(sdk.NewAttribute(types.AttributeKeyRequiredCapability, strings.TrimSpace(f)))
 	}
 	sdkCtx.EventManager().EmitEvent(evt)
 
-	return codeID, checksums, nil
+	return codeID, zkID, checksums, nil
 }
 
-// create_with_wasm stores only WASM code (no VK code)
-func (k Keeper) create_with_wasm(ctx context.Context, creator sdk.AccAddress, wasmCode []byte, instantiateAccess *types.AccessConfig, authZ types.AuthorizationPolicy) (codeID uint64, checksum []byte, err error) {
-	codeID, checksums, err := k.create_with_circuit(ctx, creator, wasmCode, nil, instantiateAccess, authZ)
-	if err != nil {
-		return 0, nil, err
-	}
-	if len(checksums) == 0 {
-		return 0, nil, types.ErrCreateFailed.Wrap("no checksums returned")
-	}
-	return codeID, checksums[0], nil
-}
-
-// TODO: update create to save vk to state
+// create stores only WASM code (legacy path, no circuit support)
 func (k Keeper) create(ctx context.Context, creator sdk.AccAddress, wasmCode []byte, instantiateAccess *types.AccessConfig, authZ types.AuthorizationPolicy) (codeID uint64, checksum []byte, err error) {
 	if creator == nil {
 		return 0, checksum, errorsmod.Wrap(sdkerrors.ErrInvalidAddress, "cannot be nil")
@@ -315,6 +363,85 @@ func (k Keeper) create(ctx context.Context, creator sdk.AccAddress, wasmCode []b
 	return codeID, checksum, nil
 }
 
+// store_circuit stores only circuit/VK code (standalone circuit upload)
+func (k Keeper) store_circuit(ctx context.Context, creator sdk.AccAddress, circuitBinary []byte, instantiateAccess *types.AccessConfig, authZ types.AuthorizationPolicy) (zkID uint64, checksum []byte, err error) {
+	if creator == nil {
+		return 0, checksum, errorsmod.Wrap(sdkerrors.ErrInvalidAddress, "cannot be nil")
+	}
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	// figure out proper instantiate access
+	defaultAccessConfig := k.getInstantiateAccessConfig(sdkCtx).With(creator)
+	if instantiateAccess == nil {
+		instantiateAccess = &defaultAccessConfig
+	}
+	chainConfigs := types.ChainAccessConfigs{
+		Instantiate: defaultAccessConfig,
+		Upload:      k.getUploadAccessConfig(sdkCtx),
+	}
+
+	if !authZ.CanCreateCode(chainConfigs, creator, *instantiateAccess) {
+		return 0, checksum, errorsmod.Wrap(sdkerrors.ErrUnauthorized, "can not create code")
+	}
+
+	if ioutils.IsGzip(circuitBinary) {
+		sdkCtx.GasMeter().ConsumeGas(k.gasRegister.UncompressCosts(len(circuitBinary)), "Uncompress gzip circuit binary")
+		circuitBinary, err = ioutils.Uncompress(circuitBinary, int64(types.MaxWasmSize))
+		if err != nil {
+			return 0, checksum, types.ErrCreateFailed.Wrap(errorsmod.Wrap(err, "uncompress circuit archive").Error())
+		}
+	}
+
+	gasLeft := k.runtimeGasForContract(sdkCtx)
+	var gasUsed uint64
+	isSimulation := sdkCtx.ExecMode() == sdk.ExecModeSimulate
+	var vmChecksum wasmvm.Checksum
+	if isSimulation {
+		// only simulate storing the circuit, no files are written
+		vmChecksum, gasUsed, err = k.wasmVM.SimulateStoreCircuit(circuitBinary, gasLeft)
+	} else {
+		vmChecksum, gasUsed, err = k.wasmVM.StoreCircuit(circuitBinary, gasLeft)
+	}
+	k.consumeRuntimeGas(sdkCtx, gasUsed)
+	if err != nil {
+		return 0, checksum, errorsmod.Wrap(types.ErrCreateFailed, err.Error())
+	}
+	checksum = []byte(vmChecksum)
+
+	zkID = uint64(k.mustAutoIncrementIDUint32(sdkCtx, types.KeySequenceCircuitID))
+	k.Logger(sdkCtx).Debug("storing new circuit", "zk_id", zkID)
+	zkInfo := types.NewCircuitInfo(checksum, creator, *instantiateAccess)
+	k.mustStoreCircuitInfo(sdkCtx, zkID, zkInfo)
+
+	// Store zkID→checksum mapping for Wasm contract access via resolve_zkid_to_checksum
+	// zkID is stored as u32 (4 bytes little-endian) for FFI compatibility
+	store := k.storeService.OpenKVStore(ctx)
+	zkidBytes := make([]byte, 4)
+	binary.LittleEndian.PutUint32(zkidBytes, uint32(zkID))
+	k.Logger(sdkCtx).Debug("storing zkid→checksum mapping",
+		"zkid", zkID,
+		"zkid_bytes_hex", hex.EncodeToString(zkidBytes),
+		"checksum_hex", hex.EncodeToString(checksum),
+	)
+	if err := store.Set(zkidBytes, checksum); err != nil {
+		return 0, checksum, err
+	}
+
+	// Store circuit binary in app state for handler access during proof verification
+	// Handler retrieves VK bytes using: storage.get(&checksum)
+	if err := store.Set(checksum, circuitBinary); err != nil {
+		return 0, checksum, err
+	}
+
+	evt := sdk.NewEvent(
+		types.EventTypeStoreCode,
+		sdk.NewAttribute(types.AttributeKeyCircuitChecksum, hex.EncodeToString(checksum)),
+		sdk.NewAttribute(types.AttributeKeyZkID, strconv.FormatUint(zkID, 10)),
+	)
+	sdkCtx.EventManager().EmitEvent(evt)
+
+	return zkID, checksum, nil
+}
+
 func (k Keeper) mustStoreCodeInfo(ctx context.Context, codeID uint64, codeInfo types.CodeInfo) {
 	store := k.storeService.OpenKVStore(ctx)
 	// 0x01 | codeID (uint64) -> ContractInfo
@@ -324,10 +451,10 @@ func (k Keeper) mustStoreCodeInfo(ctx context.Context, codeID uint64, codeInfo t
 	}
 }
 
-func (k Keeper) mustStoreCircuitInfo(ctx context.Context, vkID uint64, codeInfo types.CodeInfo) {
+func (k Keeper) mustStoreCircuitInfo(ctx context.Context, vkID uint64, circuitInfo types.CircuitInfo) {
 	store := k.storeService.OpenKVStore(ctx)
-	// 0x16 | vkID (uint64) -> ContractInfo
-	err := store.Set(types.GetCircuitKey(vkID), k.cdc.MustMarshal(&codeInfo))
+	// 0x16 | vkID (uint64) -> CircuitInfo
+	err := store.Set(types.GetCircuitKey(vkID), k.cdc.MustMarshal(&circuitInfo))
 	if err != nil {
 		panic(err)
 	}
@@ -580,6 +707,7 @@ func (k Keeper) execute(ctx context.Context, contractAddress, caller sdk.AccAddr
 		// If this gets executed, that's a bug in wasmvm
 		return nil, errorsmod.Wrap(types.ErrVMError, "internal wasmvm error")
 	}
+	fmt.Printf("res: %v\n", res)
 	if res.Err != "" {
 		return nil, types.MarkErrorDeterministic(errorsmod.Wrap(types.ErrExecuteFailed, res.Err))
 	}
@@ -1355,13 +1483,13 @@ func (k Keeper) containsCodeInfo(ctx context.Context, codeID uint64) bool {
 	return ok
 }
 
-func (k Keeper) IterateCircuitInfos(ctx context.Context, cb func(uint64, types.CodeInfo) bool) {
+func (k Keeper) IterateCircuitInfos(ctx context.Context, cb func(uint64, types.CircuitInfo) bool) {
 	prefixStore := prefix.NewStore(runtime.KVStoreAdapter(k.storeService.OpenKVStore(ctx)), types.CircuitKeyPrefix)
 	iter := prefixStore.Iterator(nil, nil)
 	defer iter.Close()
 
 	for ; iter.Valid(); iter.Next() {
-		var c types.CodeInfo
+		var c types.CircuitInfo
 		k.cdc.MustUnmarshal(iter.Value(), &c)
 		// cb returns true to stop early
 		if cb(binary.BigEndian.Uint64(iter.Key()), c) {
@@ -1387,7 +1515,7 @@ func (k Keeper) IterateCodeInfos(ctx context.Context, cb func(uint64, types.Code
 
 func (k Keeper) GetByteCircuit(ctx context.Context, zkID uint64) ([]byte, error) {
 	store := k.storeService.OpenKVStore(ctx)
-	var circuitInfo types.CodeInfo
+	var circuitInfo types.CircuitInfo
 	zkInfoBz, err := store.Get(types.GetCircuitKey(zkID))
 	if err != nil {
 		return nil, err
@@ -1396,7 +1524,7 @@ func (k Keeper) GetByteCircuit(ctx context.Context, zkID uint64) ([]byte, error)
 		return nil, nil
 	}
 	k.cdc.MustUnmarshal(zkInfoBz, &circuitInfo)
-	return k.wasmVM.GetCircuit(circuitInfo.CodeHash)
+	return k.wasmVM.GetCircuit(circuitInfo.CircuitHash)
 }
 
 func (k Keeper) GetByteCode(ctx context.Context, codeID uint64) ([]byte, error) {
@@ -1663,6 +1791,41 @@ func (k Keeper) mustAutoIncrementID(ctx context.Context, sequenceKey []byte) uin
 		panic(err)
 	}
 	return id
+}
+
+// mustAutoIncrementIDUint32 auto-increments a u32 sequence counter in storage
+// Used for zkID generation (which must fit in u32 for FFI compatibility)
+func (k Keeper) mustAutoIncrementIDUint32(ctx context.Context, sequenceKey []byte) uint32 {
+	store := k.storeService.OpenKVStore(ctx)
+	bz, err := store.Get(sequenceKey)
+	if err != nil {
+		panic(err)
+	}
+	id := uint32(1)
+	if bz != nil {
+		id = binary.LittleEndian.Uint32(bz)
+	}
+	bz = make([]byte, 4)
+	binary.LittleEndian.PutUint32(bz, id+1)
+	err = store.Set(sequenceKey, bz)
+	if err != nil {
+		panic(err)
+	}
+	return id
+}
+
+// PeekAutoIncrementID reads the current value without incrementing it.
+func (k Keeper) PeekAutoIncrementIDUint32(ctx context.Context, sequenceKey []byte) (uint32, error) {
+	store := k.storeService.OpenKVStore(ctx)
+	bz, err := store.Get(sequenceKey)
+	if err != nil {
+		return 0, errorsmod.Wrap(err, "sequence key")
+	}
+	id := uint32(1)
+	if bz != nil {
+		id = binary.LittleEndian.Uint32(bz)
+	}
+	return id, nil
 }
 
 // PeekAutoIncrementID reads the current value without incrementing it.

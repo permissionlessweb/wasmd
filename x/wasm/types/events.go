@@ -72,7 +72,7 @@ const (
 	AttributeKeyCodeID              = "code_id"
 	AttributeKeyZkID                = "zk_id"
 	AttributeKeyChecksum            = "code_checksum"
-	AttributeKeyVKChecksum          = "vk_checksum"
+	AttributeKeyCircuitChecksum     = "circuit_checksum"
 	AttributeKeyResultDataHex       = "result"
 	AttributeKeyRequiredCapability  = "required_capability"
 	AttributeKeyNewAdmin            = "new_admin_address"

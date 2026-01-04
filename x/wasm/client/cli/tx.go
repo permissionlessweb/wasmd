@@ -61,7 +61,7 @@ func GetTxCmd() *cobra.Command {
 		SilenceUsage:               true,
 	}
 	txCmd.AddCommand(
-		StoreCodeWithVkCmd(),
+		StoreCodeWithCircuitCmd(),
 		StoreCircuitCmd(),
 		StoreCodeCmd(),
 		InstantiateContractCmd(),
@@ -78,8 +78,8 @@ func GetTxCmd() *cobra.Command {
 	return txCmd
 }
 
-// StoreCodeWithVkCmd will upload code to be reused with a halo2 veriyfing key.
-func StoreCodeWithVkCmd() *cobra.Command {
+// StoreCodeWithCircuitCmd will upload code to be reused with a halo2 veriyfing key.
+func StoreCodeWithCircuitCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "store-with-vk [wasm file] [halo2-vk-file]",
 		Short:   "Upload a wasm binary & halo2-verifying-key binary",

@@ -512,7 +512,10 @@ func TestImportContractWithCodeHistoryPreserved(t *testing.T) {
 		"code_upload_access": {
 			"permission": "Everybody"
 		},
-		"instantiate_default_permission": "Everybody"
+		"instantiate_default_permission": "Everybody",
+		"circuit_upload_access": {
+			"permission": "Everybody"
+		}
 	},
   "codes": [
     {

@@ -35,7 +35,7 @@ func (m msgServer) StoreCodeWithCircuit(ctx context.Context, msg *types.MsgStore
 
 	policy := m.selectAuthorizationPolicy(ctx, msg.Sender)
 
-	codeID, checksums, err := m.keeper.create_with_circuit(ctx, senderAddr, msg.WASMByteCode, msg.CircuitBinaryFile, msg.InstantiatePermission, policy)
+	codeID, zkID, checksums, err := m.keeper.create_with_circuit(ctx, senderAddr, msg.WASMByteCode, msg.CircuitBinaryFile, msg.InstantiatePermission, policy)
 	if err != nil {
 		return nil, err
 	}
@@ -47,7 +47,7 @@ func (m msgServer) StoreCodeWithCircuit(ctx context.Context, msg *types.MsgStore
 				Checksum: checksums[0],
 			},
 			{
-				CodeID:   codeID,
+				CodeID:   zkID,
 				Checksum: checksums[1],
 			},
 		},
@@ -89,13 +89,13 @@ func (m msgServer) StoreCircuit(ctx context.Context, msg *types.MsgStoreCircuit)
 
 	policy := m.selectAuthorizationPolicy(ctx, msg.Sender)
 
-	codeID, checksum, err := m.keeper.create_with_wasm(ctx, senderAddr, msg.CircuitBinaryFile, msg.InstantiatePermission, policy)
+	zkID, checksum, err := m.keeper.store_circuit(ctx, senderAddr, msg.CircuitBinaryFile, msg.InstantiatePermission, policy)
 	if err != nil {
 		return nil, err
 	}
 
 	return &types.MsgStoreCircuitResponse{
-		ZkID:     codeID,
+		ZkID:     zkID,
 		Checksum: checksum,
 	}, nil
 }

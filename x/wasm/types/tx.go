@@ -74,7 +74,7 @@ func (msg MsgStoreCircuit) ValidateBasic() error {
 	return nil
 }
 
-func (msg MsgStoreCodeWithVk) ValidateBasic() error {
+func (msg MsgStoreCodeWithCircuit) ValidateBasic() error {
 	if _, err := sdk.AccAddressFromBech32(msg.Sender); err != nil {
 		return err
 	}
