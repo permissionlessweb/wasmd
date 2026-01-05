@@ -397,9 +397,12 @@ func queryCircuit(ctx sdk.Context, zkID uint64, keeper types.ViewKeeper) (*types
 		return nil, nil
 	}
 
-	code, err := keeper.GetByteCircuit(ctx, zkID)
-	if err != nil {
-		return nil, errorsmod.Wrap(err, "loading wasm code")
+	code, err := keeper.GetCircuit(ctx, zkID)
+	if err == nil {
+		return nil, err
+	}
+	if code == nil {
+		return nil, types.ErrNoSuchCircuitFn(zkID)
 	}
 
 	return &types.QueryCircuitResponse{CircuitInfoResponse: info, Data: code}, nil

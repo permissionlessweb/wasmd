@@ -37,6 +37,7 @@ var (
 	ParamsKey                                      = []byte{0x10}
 	AsyncAckKeyPrefix                              = []byte{0x11}
 
+	CircuitInfoKeyPrefix      = []byte{0x16}
 	CircuitKeyPrefix          = []byte{0x16}
 	CircuitsByCreatorPrefix   = []byte{0x18}
 	PinnedCircuitsIndexPrefix = []byte{0x07}
@@ -56,6 +57,12 @@ func GetCodeKey(codeID uint64) []byte {
 func GetCircuitKey(zkId uint64) []byte {
 	circuitIdBz := sdk.Uint64ToBigEndian(zkId)
 	return append(CircuitKeyPrefix, circuitIdBz...)
+}
+
+// GetCircuitKey constructs the key for retrieving the ID for the zk-proof circuit binary
+func GetCircuitInfoKey(zkId uint64) []byte {
+	circuitIdBz := sdk.Uint64ToBigEndian(zkId)
+	return append(CircuitInfoKeyPrefix, circuitIdBz...)
 }
 
 // GetContractAddressKey returns the key for the WASM contract instance

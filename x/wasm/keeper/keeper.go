@@ -254,31 +254,25 @@ func (k Keeper) create_with_circuit(ctx context.Context, creator sdk.AccAddress,
 	}
 	codeID = k.mustAutoIncrementID(sdkCtx, types.KeySequenceCodeID)
 	zkIDUint32 := k.mustAutoIncrementIDUint32(sdkCtx, types.KeySequenceCircuitID)
-	k.Logger(sdkCtx).Debug("storing new contract with vk", "capabilities", requiredCapabilities, "code_id", codeID, "zk_id", zkIDUint32)
+	k.Logger(sdkCtx).Info("storing new contract with vk", "capabilities", requiredCapabilities, "code_id", codeID, "zk_id", zkIDUint32)
 	codeInfo := types.NewCodeInfo(checksums[0], creator, *instantiateAccess)
 	vkInfo := types.NewCircuitInfo(checksums[1], creator, *instantiateAccess)
 	k.mustStoreCodeInfo(sdkCtx, codeID, codeInfo)
 	k.mustStoreCircuitInfo(sdkCtx, uint64(zkIDUint32), vkInfo)
 
-	// Store zkID→checksum mapping for Wasm contract access via resolve_zkid_to_checksum
-	// zkID is stored as u32 (4 bytes little-endian) for FFI compatibility
-	store := k.storeService.OpenKVStore(ctx)
-	zkidBytes := make([]byte, 4)
-	binary.LittleEndian.PutUint32(zkidBytes, zkIDUint32)
-	k.Logger(sdkCtx).Debug("storing zkid→checksum mapping (create_with_circuit)",
-		"zkid", zkIDUint32,
-		"zkid_bytes_hex", hex.EncodeToString(zkidBytes),
-		"checksum_hex", hex.EncodeToString(checksums[1]),
+	// Store circuit binary in app state for contract access during initialization
+	// The contract will retrieve this during instantiation and store it in its own state.
+	// The handler will then look up the circuit from the contract's state using the checksum key.
+	store := k.storeService.OpenKVStore(sdkCtx)
+	k.Logger(sdkCtx).Info("DEBUG: storing circuit binary in app state",
+		"checksum", hex.EncodeToString(checksums[1]),
+		"circuit_binary_size", len(vkCode),
 	)
-	if err := store.Set(zkidBytes, checksums[1]); err != nil {
-		return 0, 0, nil, err
-	}
-
-	// Store circuit binary in app state for handler access during proof verification
-	// Handler retrieves VK bytes using: storage.get(&checksum)
 	if err := store.Set(checksums[1], vkCode); err != nil {
+		k.Logger(sdkCtx).Error("DEBUG: failed to store circuit binary in app state", "error", err)
 		return 0, 0, nil, err
 	}
+	k.Logger(sdkCtx).Info("DEBUG: circuit binary stored successfully in app state for contract retrieval")
 
 	evt := sdk.NewEvent(
 		types.EventTypeStoreCode,
@@ -408,29 +402,23 @@ func (k Keeper) store_circuit(ctx context.Context, creator sdk.AccAddress, circu
 	checksum = []byte(vmChecksum)
 
 	zkID = uint64(k.mustAutoIncrementIDUint32(sdkCtx, types.KeySequenceCircuitID))
-	k.Logger(sdkCtx).Debug("storing new circuit", "zk_id", zkID)
+	k.Logger(sdkCtx).Info("storing new circuit", "zk_id", zkID)
 	zkInfo := types.NewCircuitInfo(checksum, creator, *instantiateAccess)
 	k.mustStoreCircuitInfo(sdkCtx, zkID, zkInfo)
 
-	// Store zkID→checksum mapping for Wasm contract access via resolve_zkid_to_checksum
-	// zkID is stored as u32 (4 bytes little-endian) for FFI compatibility
-	store := k.storeService.OpenKVStore(ctx)
-	zkidBytes := make([]byte, 4)
-	binary.LittleEndian.PutUint32(zkidBytes, uint32(zkID))
-	k.Logger(sdkCtx).Debug("storing zkid→checksum mapping",
-		"zkid", zkID,
-		"zkid_bytes_hex", hex.EncodeToString(zkidBytes),
-		"checksum_hex", hex.EncodeToString(checksum),
+	// Store circuit binary in app state for contract access during initialization
+	// The contract will retrieve this during instantiation and store it in its own state.
+	// The handler will then look up the circuit from the contract's state using the checksum key.
+	store := k.storeService.OpenKVStore(sdkCtx)
+	k.Logger(sdkCtx).Info("DEBUG: storing circuit binary in app state",
+		"checksum", hex.EncodeToString(checksum),
+		"circuit_binary_size", len(circuitBinary),
 	)
-	if err := store.Set(zkidBytes, checksum); err != nil {
-		return 0, checksum, err
-	}
-
-	// Store circuit binary in app state for handler access during proof verification
-	// Handler retrieves VK bytes using: storage.get(&checksum)
 	if err := store.Set(checksum, circuitBinary); err != nil {
+		k.Logger(sdkCtx).Error("DEBUG: failed to store circuit binary in app state", "error", err)
 		return 0, checksum, err
 	}
+	k.Logger(sdkCtx).Info("DEBUG: circuit binary stored successfully in app state for contract retrieval")
 
 	evt := sdk.NewEvent(
 		types.EventTypeStoreCode,
@@ -1454,7 +1442,7 @@ func (k Keeper) GetCodeInfo(ctx context.Context, codeID uint64) *types.CodeInfo 
 func (k Keeper) GetCircuitInfo(ctx context.Context, zkID uint64) *types.CircuitInfo {
 	store := k.storeService.OpenKVStore(ctx)
 	var circuitInfo types.CircuitInfo
-	zkInfoBz, err := store.Get(types.GetCircuitKey(zkID))
+	zkInfoBz, err := store.Get(types.GetCircuitInfoKey(zkID))
 	if err != nil {
 		panic(err)
 	}
@@ -1467,7 +1455,7 @@ func (k Keeper) GetCircuitInfo(ctx context.Context, zkID uint64) *types.CircuitI
 
 func (k Keeper) containsCircuitInfo(ctx context.Context, zkID uint64) bool {
 	store := k.storeService.OpenKVStore(ctx)
-	ok, err := store.Has(types.GetCircuitKey(zkID))
+	ok, err := store.Has(types.GetCircuitInfoKey(zkID))
 	if err != nil {
 		panic(err)
 	}
@@ -1513,7 +1501,7 @@ func (k Keeper) IterateCodeInfos(ctx context.Context, cb func(uint64, types.Code
 	}
 }
 
-func (k Keeper) GetByteCircuit(ctx context.Context, zkID uint64) ([]byte, error) {
+func (k Keeper) GetCircuit(ctx context.Context, zkID uint64) ([]byte, error) {
 	store := k.storeService.OpenKVStore(ctx)
 	var circuitInfo types.CircuitInfo
 	zkInfoBz, err := store.Get(types.GetCircuitKey(zkID))

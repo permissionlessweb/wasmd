@@ -106,6 +106,8 @@ type contractMetaDataSource interface {
 
 type wasmQueryKeeper interface {
 	contractMetaDataSource
+	GetCircuit(ctx context.Context, zkID uint64) ([]byte, error)
+	GetCircuitInfo(ctx context.Context, zkID uint64) *types.CircuitInfo
 	GetCodeInfo(ctx context.Context, codeID uint64) *types.CodeInfo
 	QueryRaw(ctx context.Context, contractAddress sdk.AccAddress, key []byte) []byte
 	QueryRawRange(ctx context.Context, contractAddress sdk.AccAddress, start, end []byte, limit uint16, reverse bool) (results []wasmvmtypes.RawRangeEntry, nextKey []byte)
@@ -728,7 +730,36 @@ func WasmQuerier(k wasmQueryKeeper) func(ctx sdk.Context, request *wasmvmtypes.W
 				NextKey: nextKey,
 			}
 			return json.Marshal(res)
+		case request.Circuit != nil:
+			if request.Circuit.ZkID == 0 {
+				return nil, types.ErrEmpty.Wrap("zk id")
+			}
+			data, err := k.GetCircuit(ctx, request.Circuit.ZkID)
 
+			if err != nil {
+				return nil, types.ErrNoSuchCircuitFn(request.Circuit.ZkID).Wrapf("circuit zk_id %d", request.Circuit.ZkID)
+			}
+			if data == nil {
+				return nil, types.ErrNoSuchCircuitFn(request.Circuit.ZkID).Wrapf("circuit zk_id %d", request.Circuit.ZkID)
+			}
+			res := wasmvmtypes.CircuitResponse{
+				Data: data,
+			}
+			return json.Marshal(res)
+		case request.CircuitInfo != nil:
+			if request.CircuitInfo.ZkID == 0 {
+				return nil, types.ErrEmpty.Wrap("zk id")
+			}
+			info := k.GetCircuitInfo(ctx, request.CircuitInfo.ZkID)
+			if info == nil {
+				return nil, types.ErrNoSuchCodeFn(request.CircuitInfo.ZkID).Wrapf("circuit zk_id %d", request.CircuitInfo.ZkID)
+			}
+			res := wasmvmtypes.CircuitInfoResponse{
+				ZkID:     request.CircuitInfo.ZkID,
+				Creator:  info.Creator,
+				Checksum: info.CircuitHash,
+			}
+			return json.Marshal(res)
 		}
 		return nil, wasmvmtypes.UnsupportedRequest{Kind: "unknown WasmQuery variant"}
 	}

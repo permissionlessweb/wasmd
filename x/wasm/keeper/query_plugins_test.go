@@ -716,6 +716,8 @@ func TestQueryErrors(t *testing.T) {
 }
 
 type mockWasmQueryKeeper struct {
+	GetCircuitFn      func(ctx context.Context, zkID uint64) ([]byte, error)
+	GetCircuitInfoFn  func(ctx context.Context, zkID uint64) *types.CircuitInfo
 	GetContractInfoFn func(ctx context.Context, contractAddress sdk.AccAddress) *types.ContractInfo
 	QueryRawFn        func(ctx context.Context, contractAddress sdk.AccAddress, key []byte) []byte
 	QuerySmartFn      func(ctx context.Context, contractAddr sdk.AccAddress, req types.RawContractMessage) ([]byte, error)
@@ -764,6 +766,19 @@ func (m mockWasmQueryKeeper) GetCodeInfo(ctx context.Context, codeID uint64) *ty
 		panic("not expected to be called")
 	}
 	return m.GetCodeInfoFn(ctx, codeID)
+}
+func (m mockWasmQueryKeeper) GetCircuitInfo(ctx context.Context, zkID uint64) *types.CircuitInfo {
+	if m.GetCircuitInfoFn == nil {
+		panic("not expected to be called")
+	}
+	return m.GetCircuitInfoFn(ctx, zkID)
+}
+
+func (m mockWasmQueryKeeper) GetCircuit(ctx context.Context, zkID uint64) ([]byte, error) {
+	if m.GetCircuitInfoFn == nil {
+		panic("not expected to be called")
+	}
+	return m.GetCircuitFn(ctx, zkID)
 }
 
 type bankKeeperMock struct {

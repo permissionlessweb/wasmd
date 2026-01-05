@@ -26,7 +26,7 @@ type ViewKeeper interface {
 	GetCircuitInfo(ctx context.Context, codeID uint64) *CircuitInfo
 	IterateCodeInfos(ctx context.Context, cb func(uint64, CodeInfo) bool)
 	GetByteCode(ctx context.Context, codeID uint64) ([]byte, error)
-	GetByteCircuit(ctx context.Context, codeID uint64) ([]byte, error)
+	GetCircuit(ctx context.Context, zkID uint64) ([]byte, error)
 	IsPinnedCode(ctx context.Context, codeID uint64) bool
 	GetParams(ctx context.Context) Params
 	GetWasmLimits() wasmvmtypes.WasmLimits

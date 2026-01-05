@@ -228,6 +228,48 @@ func GetCmdQueryCode() *cobra.Command {
 	return cmd
 }
 
+// GetCmdQueryCode returns the bytecode for a given contract
+func GetCmdQueryCircuit() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:     "circuit [zk_id] [output filename]",
+		Short:   "Downloads circuit bytecode for given circuit id",
+		Long:    "Downloads circuit bytecode for given circuit id",
+		Aliases: []string{"circuit-bin", "circuit-source"},
+		Args:    cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			clientCtx, err := client.GetClientQueryContext(cmd)
+			if err != nil {
+				return err
+			}
+
+			zkID, err := strconv.ParseUint(args[0], 10, 64)
+			if err != nil {
+				return err
+			}
+
+			queryClient := types.NewQueryClient(clientCtx)
+			res, err := queryClient.Circuit(
+				context.Background(),
+				&types.QueryCircuitRequest{
+					ZkId: zkID,
+				},
+			)
+			if err != nil {
+				return err
+			}
+			if len(res.Data) == 0 {
+				return errors.New("contract not found")
+			}
+
+			fmt.Printf("Downloading wasm code to %s\n", args[1])
+			return os.WriteFile(args[1], res.Data, 0o600)
+		},
+		SilenceUsage: true,
+	}
+	flags.AddQueryFlagsToCmd(cmd)
+	return cmd
+}
+
 // GetCmdQueryCodeInfo returns the code info for a given code id
 func GetCmdQueryCodeInfo() *cobra.Command {
 	cmd := &cobra.Command{
@@ -251,6 +293,43 @@ func GetCmdQueryCodeInfo() *cobra.Command {
 				context.Background(),
 				&types.QueryCodeInfoRequest{
 					CodeId: codeID,
+				},
+			)
+			if err != nil {
+				return err
+			}
+
+			return clientCtx.PrintProto(res)
+		},
+		SilenceUsage: true,
+	}
+	flags.AddQueryFlagsToCmd(cmd)
+	return cmd
+}
+
+// GetCmdQueryCodeInfo returns the code info for a given code id
+func GetCmdQueryCircuitInfo() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "circuit-info [zk-id]",
+		Short: "Prints out metadata of a circuit id",
+		Long:  "Prints out metadata of a circuit id",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			clientCtx, err := client.GetClientQueryContext(cmd)
+			if err != nil {
+				return err
+			}
+
+			zkID, err := strconv.ParseUint(args[0], 10, 64)
+			if err != nil {
+				return err
+			}
+
+			queryClient := types.NewQueryClient(clientCtx)
+			res, err := queryClient.CircuitInfo(
+				context.Background(),
+				&types.QueryCircuitInfoRequest{
+					ZkId: zkID,
 				},
 			)
 			if err != nil {
@@ -498,6 +577,42 @@ func GetCmdGetContractHistory() *cobra.Command {
 }
 
 // GetCmdListPinnedCode lists all wasm code ids that are pinned
+func GetCmdListPinnedCircuits() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "pinned",
+		Short: "List all pinned circuit ids",
+		Long:  "List all pinned circuit ids",
+		Args:  cobra.ExactArgs(0),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			clientCtx, err := client.GetClientQueryContext(cmd)
+			if err != nil {
+				return err
+			}
+
+			pageReq, err := client.ReadPageRequest(withPageKeyDecoded(cmd.Flags()))
+			if err != nil {
+				return err
+			}
+			queryClient := types.NewQueryClient(clientCtx)
+			res, err := queryClient.PinnedCircuits(
+				context.Background(),
+				&types.QueryPinnedCircuitsRequest{
+					Pagination: pageReq,
+				},
+			)
+			if err != nil {
+				return err
+			}
+			return clientCtx.PrintProto(res)
+		},
+		SilenceUsage: true,
+	}
+	flags.AddQueryFlagsToCmd(cmd)
+	addPaginationFlags(cmd, "list codes")
+	return cmd
+}
+
+// GetCmdListPinnedCode lists all wasm code ids that are pinned
 func GetCmdListPinnedCode() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "pinned",
@@ -573,6 +688,47 @@ func GetCmdListContractsByCreator() *cobra.Command {
 	addPaginationFlags(cmd, "list contracts by creator")
 	return cmd
 }
+
+// // GetCmdListCircuitsByCreator lists all circuits by creator
+// func GetCmdListCircuitsByCreator() *cobra.Command {
+// 	cmd := &cobra.Command{
+// 		Use:   "list-circuits-by-creator [creator]",
+// 		Short: "List all circuits by creator",
+// 		Long:  "List all circuits by creator",
+// 		Args:  cobra.ExactArgs(1),
+// 		RunE: func(cmd *cobra.Command, args []string) error {
+// 			clientCtx, err := client.GetClientQueryContext(cmd)
+// 			if err != nil {
+// 				return err
+// 			}
+// 			_, err = sdk.AccAddressFromBech32(args[0])
+// 			if err != nil {
+// 				return err
+// 			}
+// 			pageReq, err := client.ReadPageRequest(withPageKeyDecoded(cmd.Flags()))
+// 			if err != nil {
+// 				return err
+// 			}
+
+// 			queryClient := types.NewQueryClient(clientCtx)
+// 			res, err := queryClient.Cir(
+// 				context.Background(),
+// 				&types.QueryContractsByCreatorRequest{
+// 					CreatorAddress: args[0],
+// 					Pagination:     pageReq,
+// 				},
+// 			)
+// 			if err != nil {
+// 				return err
+// 			}
+// 			return clientCtx.PrintProto(res)
+// 		},
+// 		SilenceUsage: true,
+// 	}
+// 	flags.AddQueryFlagsToCmd(cmd)
+// 	addPaginationFlags(cmd, "list contracts by creator")
+// 	return cmd
+// }
 
 type argumentDecoder struct {
 	// dec is the default decoder

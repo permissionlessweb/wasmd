@@ -58,11 +58,13 @@ service Query {
     option (cosmos.query.v1.module_query_safe) = true;
     option (google.api.http).get = "/cosmwasm/wasm/v1/code/{code_id}";
   }
+  
   // Circuit gets the binary vk and metadata footer binary for a single circuit
   rpc Circuit(QueryCircuitRequest) returns (QueryCircuitResponse) {
     option (cosmos.query.v1.module_query_safe) = true;
     option (google.api.http).get = "/cosmwasm/wasm/v1/circuit/{zk_id}";
   }
+
   // Codes gets the metadata for all stored wasm codes
   rpc Codes(QueryCodesRequest) returns (QueryCodesResponse) {
     option (cosmos.query.v1.module_query_safe) = true;
@@ -86,6 +88,7 @@ service Query {
     option (cosmos.query.v1.module_query_safe) = true;
     option (google.api.http).get = "/cosmwasm/wasm/v1/codes/pinned";
   }
+
   // PinnedCircuits gets the pinned code ids
   rpc PinnedCircuits(QueryPinnedCircuitsRequest)
       returns (QueryPinnedCircuitsResponse) {
