@@ -2,6 +2,9 @@ module github.com/CosmWasm/wasmd
 
 go 1.24.0
 
+// replace github.com/CosmWasm/wasmvm/v3 => github.com/permissionlessweb/wasmvm/v3 v3.0.0-20251225071339-285f99fc0d2e
+replace github.com/CosmWasm/wasmvm/v3 => ../zk-wasmvm
+
 require (
 	github.com/CosmWasm/wasmvm/v3 v3.0.2
 	github.com/cosmos/cosmos-proto v1.0.0-beta.5
@@ -186,7 +189,7 @@ require (
 	github.com/rs/cors v1.11.1 // indirect
 	github.com/sagikazarmark/locafero v0.11.0 // indirect
 	github.com/sasha-s/go-deadlock v0.3.5 // indirect
-	github.com/shamaton/msgpack/v2 v2.2.3 // indirect
+	github.com/shamaton/msgpack/v2 v2.4.0 // indirect
 	github.com/sourcegraph/conc v0.3.1-0.20240121214520-5f936abd7ae8 // indirect
 	github.com/spf13/afero v1.15.0 // indirect
 	github.com/spiffe/go-spiffe/v2 v2.5.0 // indirect
@@ -234,7 +237,6 @@ require (
 
 replace (
 	github.com/99designs/keyring => github.com/cosmos/keyring v1.2.0
-	github.com/CosmWasm/wasmvm/v3 => github.com/permissionlessweb/wasmvm/v3 v3.0.0-20251225071339-285f99fc0d2e
 	// dgrijalva/jwt-go is deprecated and doesn't receive security updates.
 	// See: https://github.com/cosmos/cosmos-sdk/issues/13134
 	github.com/dgrijalva/jwt-go => github.com/golang-jwt/jwt/v4 v4.4.2

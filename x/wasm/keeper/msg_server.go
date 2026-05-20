@@ -41,15 +41,13 @@ func (m msgServer) StoreCodeWithCircuit(ctx context.Context, msg *types.MsgStore
 	}
 
 	return &types.MsgStoreCodeWithCircuitResponse{
-		MsgStoreCodeWithCircuitResponse: []*types.MsgStoreCodeResponse{
-			{
-				CodeID:   codeID,
-				Checksum: checksums[0],
-			},
-			{
-				CodeID:   zkID,
-				Checksum: checksums[1],
-			},
+		Code: &types.MsgStoreCodeResponse{
+			CodeID:   codeID,
+			Checksum: checksums[0],
+		},
+		Circuit: &types.MsgStoreCircuitResponse{
+			ZkID:     zkID,
+			Checksum: checksums[1],
 		},
 	}, nil
 }

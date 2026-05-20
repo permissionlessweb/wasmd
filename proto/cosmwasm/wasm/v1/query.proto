@@ -43,8 +43,7 @@ service Query {
   // RawContractState gets single key from the raw store data of a contract
   rpc RawContractState(QueryRawContractStateRequest)
       returns (QueryRawContractStateResponse) {
-    option (cosmos.query.v1.module_query_safe) = true;
-    option (google.api.http).get =
+      option (google.api.http).get =
         "/cosmwasm/wasm/v1/contract/{address}/raw/{query_data}";
   }
   // SmartContractState get smart query result from the contract
@@ -58,7 +57,7 @@ service Query {
     option (cosmos.query.v1.module_query_safe) = true;
     option (google.api.http).get = "/cosmwasm/wasm/v1/code/{code_id}";
   }
-  
+
   // Circuit gets the binary vk and metadata footer binary for a single circuit
   rpc Circuit(QueryCircuitRequest) returns (QueryCircuitResponse) {
     option (cosmos.query.v1.module_query_safe) = true;

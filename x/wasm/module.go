@@ -307,6 +307,9 @@ func CheckLibwasmVersion(wasmExpectedVersion string) error {
 	if wasmExpectedVersion == "" {
 		return errors.New("wasmvm module not exist")
 	}
+	if wasmExpectedVersion == "(devel)" {
+		return nil
+	}
 	wasmVersion, err := wasmvm.LibwasmvmVersion()
 	if err != nil {
 		return fmt.Errorf("unable to retrieve libwasmversion %w", err)

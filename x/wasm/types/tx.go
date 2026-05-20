@@ -68,7 +68,7 @@ func (msg MsgStoreCircuit) ValidateBasic() error {
 		return err
 	}
 
-	if err := validateCircuitCode(msg.CircuitBinaryFile, MaxWasmSize); err != nil {
+	if err := validateCircuitCode(msg.CircuitBinaryFile, MaxCircuitSize); err != nil {
 		return errorsmod.Wrapf(sdkerrors.ErrInvalidRequest, "circuit bytes %s", err.Error())
 	}
 	return nil

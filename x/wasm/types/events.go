@@ -16,6 +16,8 @@ const (
 	CustomContractEventPrefix = "wasm-"
 
 	EventTypeStoreCode              = "store_code"
+	EventTypeStoreCircuit           = "store_circuit"
+	EventTypeStoreCodeWithCircuit   = "store_code_circuit"
 	EventTypeInstantiate            = "instantiate"
 	EventTypeExecute                = "execute"
 	EventTypeMigrate                = "migrate"

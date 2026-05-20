@@ -185,10 +185,8 @@ func (k Keeper) create_with_circuit(ctx context.Context, creator sdk.AccAddress,
 	var gasUsed, totalGasUsed uint64
 	isSimulation := sdkCtx.ExecMode() == sdk.ExecModeSimulate
 	var vmChecksums []wasmvm.Checksum
-
-	// Store WASM and Circuit separately to avoid FFI issues with combined call
-	// Step 1: Store WASM code
 	var wasmChecksum wasmvm.Checksum
+
 	if isSimulation {
 		wasmChecksum, gasUsed, err = k.wasmVM.SimulateStoreCode(wasmCode, gasLeft)
 	} else {
@@ -202,7 +200,7 @@ func (k Keeper) create_with_circuit(ctx context.Context, creator sdk.AccAddress,
 
 	// Step 2: Store Circuit (if provided)
 	var circuitChecksum wasmvm.Checksum
-	if vkCode != nil && len(vkCode) > 0 {
+	if vkCode != nil {
 		gasLeft = k.runtimeGasForContract(sdkCtx)
 		if isSimulation {
 			circuitChecksum, gasUsed, err = k.wasmVM.SimulateStoreCircuit(vkCode, gasLeft)
@@ -254,7 +252,7 @@ func (k Keeper) create_with_circuit(ctx context.Context, creator sdk.AccAddress,
 	}
 	codeID = k.mustAutoIncrementID(sdkCtx, types.KeySequenceCodeID)
 	zkIDUint32 := k.mustAutoIncrementIDUint32(sdkCtx, types.KeySequenceCircuitID)
-	k.Logger(sdkCtx).Info("storing new contract with vk", "capabilities", requiredCapabilities, "code_id", codeID, "zk_id", zkIDUint32)
+	k.Logger(sdkCtx).Debug("storing new contract with vk", "capabilities", requiredCapabilities, "code_id", codeID, "zk_id", zkIDUint32)
 	codeInfo := types.NewCodeInfo(checksums[0], creator, *instantiateAccess)
 	vkInfo := types.NewCircuitInfo(checksums[1], creator, *instantiateAccess)
 	k.mustStoreCodeInfo(sdkCtx, codeID, codeInfo)
@@ -264,7 +262,7 @@ func (k Keeper) create_with_circuit(ctx context.Context, creator sdk.AccAddress,
 	// The contract will retrieve this during instantiation and store it in its own state.
 	// The handler will then look up the circuit from the contract's state using the checksum key.
 	store := k.storeService.OpenKVStore(sdkCtx)
-	k.Logger(sdkCtx).Info("DEBUG: storing circuit binary in app state",
+	k.Logger(sdkCtx).Debug("storing circuit binary in app state",
 		"checksum", hex.EncodeToString(checksums[1]),
 		"circuit_binary_size", len(vkCode),
 	)
@@ -272,10 +270,10 @@ func (k Keeper) create_with_circuit(ctx context.Context, creator sdk.AccAddress,
 		k.Logger(sdkCtx).Error("DEBUG: failed to store circuit binary in app state", "error", err)
 		return 0, 0, nil, err
 	}
-	k.Logger(sdkCtx).Info("DEBUG: circuit binary stored successfully in app state for contract retrieval")
+	k.Logger(sdkCtx).Debug("circuit binary stored successfully in app state for contract retrieval")
 
 	evt := sdk.NewEvent(
-		types.EventTypeStoreCode,
+		types.EventTypeStoreCodeWithCircuit,
 		sdk.NewAttribute(types.AttributeKeyChecksum, hex.EncodeToString(checksums[0])),
 		sdk.NewAttribute(types.AttributeKeyCircuitChecksum, hex.EncodeToString(checksums[1])),
 		sdk.NewAttribute(types.AttributeKeyCodeID, strconv.FormatUint(codeID, 10)),
@@ -421,7 +419,7 @@ func (k Keeper) store_circuit(ctx context.Context, creator sdk.AccAddress, circu
 	k.Logger(sdkCtx).Info("DEBUG: circuit binary stored successfully in app state for contract retrieval")
 
 	evt := sdk.NewEvent(
-		types.EventTypeStoreCode,
+		types.EventTypeStoreCircuit,
 		sdk.NewAttribute(types.AttributeKeyCircuitChecksum, hex.EncodeToString(checksum)),
 		sdk.NewAttribute(types.AttributeKeyZkID, strconv.FormatUint(zkID, 10)),
 	)

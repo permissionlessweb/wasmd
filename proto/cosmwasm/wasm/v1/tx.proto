@@ -122,9 +122,8 @@ message MsgStoreCodeWithCircuit {
 }
 // MsgStoreCodeResponse returns store result data.
 message MsgStoreCodeWithCircuitResponse {
-  // [0] - cosmwasm , [1] - vk
-  repeated MsgStoreCodeResponse res = 1
-      [ (gogoproto.customname) = "MsgStoreCodeWithCircuitResponse" ];
+  MsgStoreCodeResponse code = 1;
+  MsgStoreCircuitResponse circuit = 2;
 }
 
 // MsgStoreCode submit Wasm code to the system
