@@ -1647,6 +1647,39 @@ func (k Keeper) checkDiscountEligibility(ctx sdk.Context, checksum []byte, isPin
 	return types.WithTxContracts(ctx, txContracts), false
 }
 
+// InitalizedPinnedCodesAndCircuits updates wasmvm to pin to cache all contracts marked as pinned
+func (k Keeper) InitalizedPinnedCodesAndCircuits(ctx context.Context) error {
+	store := prefix.NewStore(runtime.KVStoreAdapter(k.storeService.OpenKVStore(ctx)), types.PinnedCodeIndexPrefix)
+	circuitstore := prefix.NewStore(runtime.KVStoreAdapter(k.storeService.OpenKVStore(ctx)), types.PinnedCircuitsIndexPrefix)
+	iter := store.Iterator(nil, nil)
+	circuititer := circuitstore.Iterator(nil, nil)
+	defer iter.Close()
+	defer circuititer.Close()
+
+	for ; circuititer.Valid(); circuititer.Next() {
+		zkID := types.ParsePinnedCircuitIndex(circuititer.Key())
+		circuitInfo := k.GetCircuitInfo(ctx, zkID)
+		if circuitInfo == nil {
+			return types.ErrNoSuchCircuitFn(zkID).Wrapf("zk-circuit id %d", zkID)
+		}
+		if err := k.wasmVM.PinCircuit(circuitInfo.CircuitHash); err != nil {
+			return errorsmod.Wrap(types.ErrPinCircuitFailed, err.Error())
+		}
+	}
+
+	for ; iter.Valid(); iter.Next() {
+		codeID := types.ParsePinnedCodeIndex(iter.Key())
+		codeInfo := k.GetCodeInfo(ctx, codeID)
+		if codeInfo == nil {
+			return types.ErrNoSuchCodeFn(codeID).Wrapf("code id %d", codeID)
+		}
+		if err := k.wasmVM.Pin(codeInfo.CodeHash); err != nil {
+			return errorsmod.Wrap(types.ErrPinContractFailed, err.Error())
+		}
+	}
+	return nil
+}
+
 // InitializePinnedCodes updates wasmvm to pin to cache all contracts marked as pinned
 func (k Keeper) InitializePinnedCodes(ctx context.Context) error {
 	store := prefix.NewStore(runtime.KVStoreAdapter(k.storeService.OpenKVStore(ctx)), types.PinnedCodeIndexPrefix)
