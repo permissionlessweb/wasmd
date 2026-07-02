@@ -279,7 +279,7 @@ func (k Keeper) create_with_circuit(ctx context.Context, creator sdk.AccAddress,
 		sdk.NewAttribute(types.AttributeKeyCodeID, strconv.FormatUint(codeID, 10)),
 		sdk.NewAttribute(types.AttributeKeyZkID, strconv.FormatUint(uint64(zkIDUint32), 10)),
 	)
-	for _, f := range strings.Split(requiredCapabilities, ",") {
+	for f := range strings.SplitSeq(requiredCapabilities, ",") {
 		evt.AppendAttributes(sdk.NewAttribute(types.AttributeKeyRequiredCapability, strings.TrimSpace(f)))
 	}
 	sdkCtx.EventManager().EmitEvent(evt)
@@ -400,7 +400,7 @@ func (k Keeper) store_circuit(ctx context.Context, creator sdk.AccAddress, circu
 	checksum = []byte(vmChecksum)
 
 	zkID = uint64(k.mustAutoIncrementIDUint32(sdkCtx, types.KeySequenceCircuitID))
-	k.Logger(sdkCtx).Info("storing new circuit", "zk_id", zkID)
+	k.Logger(sdkCtx).Debug("storing new circuit", "zk_id", zkID)
 	zkInfo := types.NewCircuitInfo(checksum, creator, *instantiateAccess)
 	k.mustStoreCircuitInfo(sdkCtx, zkID, zkInfo)
 
@@ -408,7 +408,7 @@ func (k Keeper) store_circuit(ctx context.Context, creator sdk.AccAddress, circu
 	// The contract will retrieve this during instantiation and store it in its own state.
 	// The handler will then look up the circuit from the contract's state using the checksum key.
 	store := k.storeService.OpenKVStore(sdkCtx)
-	k.Logger(sdkCtx).Info("DEBUG: storing circuit binary in app state",
+	k.Logger(sdkCtx).Debug("storing circuit binary in app state",
 		"checksum", hex.EncodeToString(checksum),
 		"circuit_binary_size", len(circuitBinary),
 	)
@@ -416,8 +416,8 @@ func (k Keeper) store_circuit(ctx context.Context, creator sdk.AccAddress, circu
 		k.Logger(sdkCtx).Error("DEBUG: failed to store circuit binary in app state", "error", err)
 		return 0, checksum, err
 	}
-	k.Logger(sdkCtx).Info("DEBUG: circuit binary stored successfully in app state for contract retrieval")
-
+	k.Logger(sdkCtx).Debug(" circuit binary stored successfully in app state for contract retrieval")
+	// TODO
 	evt := sdk.NewEvent(
 		types.EventTypeStoreCircuit,
 		sdk.NewAttribute(types.AttributeKeyCircuitChecksum, hex.EncodeToString(checksum)),
@@ -1558,7 +1558,7 @@ func (k Keeper) pinCircuit(ctx context.Context, zkID uint64) error {
 		return types.ErrNoSuchCodeFn(zkID).Wrapf("zk id %d", zkID)
 	}
 
-	if err := k.wasmVM.Pin(zkInfo.CircuitHash); err != nil {
+	if err := k.wasmVM.PinCircuit(zkInfo.CircuitHash); err != nil {
 		return errorsmod.Wrap(types.ErrPinCircuitFailed, err.Error())
 	}
 	store := k.storeService.OpenKVStore(ctx)
@@ -1605,7 +1605,7 @@ func (k Keeper) unpinCircuit(ctx context.Context, zkID uint64) error {
 		return types.ErrNoSuchCodeFn(zkID).Wrapf("zk-circuit id %d", zkID)
 	}
 	if err := k.wasmVM.UnpinCircuit(zkInfo.CircuitHash); err != nil {
-		return errorsmod.Wrap(types.ErrUnpinContractFailed, err.Error())
+		return errorsmod.Wrap(types.ErrUnpinCircuitFailed, err.Error())
 	}
 
 	store := k.storeService.OpenKVStore(ctx)

@@ -77,6 +77,8 @@ func (m msgServer) StoreCode(ctx context.Context, msg *types.MsgStoreCode) (*typ
 
 // StoreCircuit stores a new circuit (VK) code on chain
 func (m msgServer) StoreCircuit(ctx context.Context, msg *types.MsgStoreCircuit) (*types.MsgStoreCircuitResponse, error) {
+	// log := m.keeper.Logger(sdk.UnwrapSDKContext(ctx))
+
 	if err := msg.ValidateBasic(); err != nil {
 		return nil, err
 	}
@@ -91,6 +93,11 @@ func (m msgServer) StoreCircuit(ctx context.Context, msg *types.MsgStoreCircuit)
 	if err != nil {
 		return nil, err
 	}
+
+	// log.Debug("pinning circuit")
+	// if err := m.keeper.pinCircuit(ctx, zkID); err != nil {
+	// 	return nil, err
+	// }
 
 	return &types.MsgStoreCircuitResponse{
 		ZkID:     zkID,

@@ -256,25 +256,6 @@ func (q GrpcQuerier) Code(c context.Context, req *types.QueryCodeRequest) (*type
 		Data:             rsp.Data,
 	}, nil
 }
-func (q GrpcQuerier) Circuit(c context.Context, req *types.QueryCircuitRequest) (*types.QueryCircuitResponse, error) {
-	if req == nil {
-		return nil, status.Error(codes.InvalidArgument, "empty request")
-	}
-	if req.ZkId == 0 {
-		return nil, errorsmod.Wrap(types.ErrInvalid, "zk id")
-	}
-	rsp, err := queryCircuit(sdk.UnwrapSDKContext(c), req.ZkId, q.keeper)
-	switch {
-	case err != nil:
-		return nil, err
-	case rsp == nil:
-		return nil, types.ErrNoSuchCodeFn(req.ZkId).Wrapf("zk id %d", req.ZkId)
-	}
-	return &types.QueryCircuitResponse{
-		CircuitInfoResponse: rsp.CircuitInfoResponse,
-		Data:                rsp.Data,
-	}, nil
-}
 
 func (q GrpcQuerier) Codes(c context.Context, req *types.QueryCodesRequest) (*types.QueryCodesResponse, error) {
 	if req == nil {
@@ -325,6 +306,26 @@ func (q GrpcQuerier) CodeInfo(c context.Context, req *types.QueryCodeInfoRequest
 		Creator:               info.Creator,
 		Checksum:              info.DataHash,
 		InstantiatePermission: info.InstantiatePermission,
+	}, nil
+}
+
+func (q GrpcQuerier) Circuit(c context.Context, req *types.QueryCircuitRequest) (*types.QueryCircuitResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "empty request")
+	}
+	if req.ZkId == 0 {
+		return nil, errorsmod.Wrap(types.ErrInvalid, "zk id")
+	}
+	rsp, err := queryCircuit(sdk.UnwrapSDKContext(c), req.ZkId, q.keeper)
+	switch {
+	case err != nil:
+		return nil, err
+	case rsp == nil:
+		return nil, types.ErrNoSuchCircuitFn(req.ZkId).Wrapf("zk id %d", req.ZkId)
+	}
+	return &types.QueryCircuitResponse{
+		CircuitInfoResponse: rsp.CircuitInfoResponse,
+		Data:                rsp.Data,
 	}, nil
 }
 func (q GrpcQuerier) CircuitInfo(c context.Context, req *types.QueryCircuitInfoRequest) (*types.QueryCircuitInfoResponse, error) {

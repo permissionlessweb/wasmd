@@ -1,10 +1,9 @@
 package types
 
 import (
+	storetypes "cosmossdk.io/store/types"
 	wasmvm "github.com/CosmWasm/wasmvm/v3"
 	wasmvmtypes "github.com/CosmWasm/wasmvm/v3/types"
-
-	storetypes "cosmossdk.io/store/types"
 )
 
 // DefaultMaxQueryStackSize maximum size of the stack of recursive queries a contract can make
@@ -181,6 +180,7 @@ type WasmEngine interface {
 	// and the larger binary blobs (wasm and pre-compiles) are all managed by the
 	// rust library
 	GetCode(code wasmvm.Checksum) (wasmvm.WasmCode, error)
+
 	// GetCircuit will function as GetCode, however specifically for zk-proof circuit verifing-keys.
 	GetCircuit(code wasmvm.Checksum) (wasmvm.CircuitBinary, error)
 

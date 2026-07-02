@@ -954,7 +954,7 @@ func (app *WasmApp) setPinnedCodes(loadLatest bool) {
 		ctx := app.NewUncachedContext(true, tmproto.Header{})
 
 		// Initialize pinned codes in wasmvm as they are not persisted there
-		if err := app.WasmKeeper.InitializePinnedCodes(ctx); err != nil {
+		if err := app.WasmKeeper.InitalizedPinnedCodesAndCircuits(ctx); err != nil {
 			panic(fmt.Sprintf("failed initialize pinned codes %s", err))
 		}
 	}

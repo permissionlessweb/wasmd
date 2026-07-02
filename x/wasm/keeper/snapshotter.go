@@ -118,7 +118,7 @@ func restoreV1(_ sdk.Context, k *Keeper, compressedCode []byte) error {
 
 func finalizeV1(ctx sdk.Context, k *Keeper) error {
 	// FIXME: ensure all codes have been uploaded?
-	return k.InitializePinnedCodes(ctx)
+	return k.InitalizedPinnedCodesAndCircuits(ctx)
 }
 
 func (ws *WasmSnapshotter) processAllItems(

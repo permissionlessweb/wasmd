@@ -96,7 +96,7 @@ var (
 	// ErrUnpinContractFailed error for unpinning circuit failures
 	ErrUnpinCircuitFailed = errorsmod.Register(DefaultCodespace, 31, "unpinning circuit failed")
 	// ErrPinCircuitFailed error for pinning circuit failures
-	ErrPinCircuitFailed = errorsmod.Register(DefaultCodespace, 32, "unpinning circuit failed")
+	ErrPinCircuitFailed = errorsmod.Register(DefaultCodespace, 32, "pinning circuit failed")
 
 	// ErrNoSuchCodeFn factory for an error when a code id does not belong to a code info
 	ErrNoSuchCircuitFn = WasmVMFlavouredErrorFactory(errorsmod.Register(DefaultCodespace, 33, "no such circuit"),
