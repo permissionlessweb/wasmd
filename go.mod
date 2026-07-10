@@ -3,7 +3,7 @@ module github.com/CosmWasm/wasmd
 go 1.24.0
 
 // go mod edit -replace github.com/CosmWasm/wasmvm/v3=github.com/permissionlessweb/wasmvm/v3@178ec936f3ba4b964aeb8872029200f75e96b20d
-replace github.com/CosmWasm/wasmvm/v3 => github.com/permissionlessweb/wasmvm/v3 v3.0.0-20260701204025-178ec936f3ba
+replace github.com/CosmWasm/wasmvm/v3 => ../zk-wasmvm
 
 require (
 	github.com/CosmWasm/wasmvm/v3 v3.0.2

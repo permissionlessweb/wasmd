@@ -67,23 +67,12 @@ func (msg MsgStoreCircuit) ValidateBasic() error {
 	if _, err := sdk.AccAddressFromBech32(msg.Sender); err != nil {
 		return err
 	}
-
+	if msg.CircuitParamKey == 0 {
+		return errorsmod.Wrap(sdkerrors.ErrInvalidRequest, "param_key (cs_param_id) is required")
+	}
 	if err := validateCircuitCode(msg.CircuitBinaryFile, MaxCircuitSize); err != nil {
-		return errorsmod.Wrapf(sdkerrors.ErrInvalidRequest, "circuit bytes %s", err.Error())
+		return errorsmod.Wrapf(sdkerrors.ErrInvalidRequest, "vk_body bytes %s", err.Error())
 	}
-	return nil
-}
-
-func (msg MsgStoreCodeWithCircuit) ValidateBasic() error {
-	if _, err := sdk.AccAddressFromBech32(msg.Sender); err != nil {
-		return err
-	}
-
-	if err := validateWasmCode(msg.WASMByteCode, MaxWasmSize); err != nil {
-		return errorsmod.Wrapf(sdkerrors.ErrInvalidRequest, "code bytes %s", err.Error())
-	}
-	// TODO: validate vk keys
-
 	if msg.InstantiatePermission != nil {
 		if err := msg.InstantiatePermission.ValidateBasic(); err != nil {
 			return errorsmod.Wrap(err, "instantiate permission")
@@ -91,6 +80,67 @@ func (msg MsgStoreCodeWithCircuit) ValidateBasic() error {
 	}
 	return nil
 }
+
+func (msg MsgStoreVkParam) Type() string {
+	return "store-vk-param"
+}
+
+func (msg MsgStoreVkParam) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(msg.Sender); err != nil {
+		return err
+	}
+	if msg.CircuitParamAuth == nil {
+		return errorsmod.Wrap(sdkerrors.ErrInvalidRequest, "circuit param auth is required")
+	}
+	if msg.CircuitParamAuth.K == 0 {
+		return errorsmod.Wrap(sdkerrors.ErrInvalidRequest, "k must be non-zero")
+	}
+	if err := validateCircuitCode(msg.CsParam, MaxCircuitSize); err != nil {
+		return errorsmod.Wrapf(sdkerrors.ErrInvalidRequest, "param bytes %s", err.Error())
+	}
+	return nil
+}
+
+func (msg MsgStoreFullCircuit) Type() string {
+	return "store-full-circuit"
+}
+
+func (msg MsgStoreFullCircuit) ValidateBasic() error {
+	if _, err := sdk.AccAddressFromBech32(msg.Sender); err != nil {
+		return err
+	}
+	if msg.Auth == nil {
+		return errorsmod.Wrap(sdkerrors.ErrInvalidRequest, "circuit param auth is required")
+	}
+	if msg.Auth.K == 0 {
+		return errorsmod.Wrap(sdkerrors.ErrInvalidRequest, "k must be non-zero")
+	}
+	if err := validateCircuitCode(msg.CircuitParamBinaryFile, MaxCircuitSize); err != nil {
+		return errorsmod.Wrapf(sdkerrors.ErrInvalidRequest, "params_body %s", err.Error())
+	}
+	if err := validateCircuitCode(msg.CircuitVkBinaryFile, MaxCircuitSize); err != nil {
+		return errorsmod.Wrapf(sdkerrors.ErrInvalidRequest, "vk_body %s", err.Error())
+	}
+	return nil
+}
+
+// func (msg MsgStoreCodeWithCircuit) ValidateBasic() error {
+// 	if _, err := sdk.AccAddressFromBech32(msg.Sender); err != nil {
+// 		return err
+// 	}
+
+// 	if err := validateWasmCode(msg.WASMByteCode, MaxWasmSize); err != nil {
+// 		return errorsmod.Wrapf(sdkerrors.ErrInvalidRequest, "code bytes %s", err.Error())
+// 	}
+// 	// TODO: validate vk keys
+
+// 	if msg.InstantiatePermission != nil {
+// 		if err := msg.InstantiatePermission.ValidateBasic(); err != nil {
+// 			return errorsmod.Wrap(err, "instantiate permission")
+// 		}
+// 	}
+// 	return nil
+// }
 
 func (msg MsgStoreCode) ValidateBasic() error {
 	if _, err := sdk.AccAddressFromBech32(msg.Sender); err != nil {

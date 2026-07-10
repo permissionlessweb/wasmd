@@ -48,6 +48,10 @@ const (
 	flagNoTokenTransfer           = "no-token-transfer"
 	flagAuthority                 = "authority"
 	flagExpedite                  = "expedite"
+	flagParamKey                  = "param-key"
+	flagCircuitType               = "circuit-type"
+	flagCurveType                 = "curve-type"
+	flagK                         = "k"
 )
 
 // GetTxCmd returns the transaction commands for this module
@@ -61,8 +65,9 @@ func GetTxCmd() *cobra.Command {
 		SilenceUsage:               true,
 	}
 	txCmd.AddCommand(
-		StoreCodeWithCircuitCmd(),
+		StoreVkParamCmd(),
 		StoreCircuitCmd(),
+		StoreFullCircuitCmd(),
 		StoreCodeCmd(),
 		InstantiateContractCmd(),
 		InstantiateContract2Cmd(),
@@ -78,19 +83,19 @@ func GetTxCmd() *cobra.Command {
 	return txCmd
 }
 
-// StoreCodeWithCircuitCmd will upload code to be reused with a halo2 veriyfing key.
-func StoreCodeWithCircuitCmd() *cobra.Command {
+// StoreVkParamCmd uploads reusable commitment params (metadata queryable; raw bytes are not).
+func StoreVkParamCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "store-with-vk [wasm file] [halo2-vk-file]",
-		Short:   "Upload a wasm binary & halo2-verifying-key binary",
-		Aliases: []string{"upload-with-vk", "headstash", "svk", "hs"},
-		Args:    cobra.ExactArgs(2),
+		Use:     "store-vk-param [param binary file]",
+		Short:   "Upload reusable circuit commitment params",
+		Aliases: []string{"upload-vk-param", "store-param", "svp"},
+		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			clientCtx, err := client.GetClientTxContext(cmd)
 			if err != nil {
 				return err
 			}
-			msg, err := parseStoreCodeWithCircuitArgs(args[0], args[1], clientCtx.GetFromAddress().String(), cmd.Flags())
+			msg, err := parseStoreVkParamArgs(args[0], clientCtx.GetFromAddress().String(), cmd.Flags())
 			if err != nil {
 				return err
 			}
@@ -98,17 +103,18 @@ func StoreCodeWithCircuitCmd() *cobra.Command {
 		},
 		SilenceUsage: true,
 	}
-
-	addInstantiatePermissionFlags(cmd)
+	cmd.Flags().Uint64(flagCircuitType, 0, "prover / circuit type id")
+	cmd.Flags().Uint64(flagCurveType, 0, "curve type id")
+	cmd.Flags().Uint64(flagK, 0, "halo2 k (required, non-zero)")
 	flags.AddTxFlagsToCmd(cmd)
 	return cmd
 }
 
-// StoreCodeCmd will upload code to be reused.
+// StoreCircuitCmd uploads a vk body that references a previously stored param set.
 func StoreCircuitCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "store-circuit [circuit binary file]",
-		Short:   "Upload a zk-circuit binary",
+		Use:     "store-circuit [vk body file]",
+		Short:   "Upload circuit vk body (cs+vk+footer) referencing --param-key",
 		Aliases: []string{"upload-circuit", "circuit", "uc"},
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -125,7 +131,35 @@ func StoreCircuitCmd() *cobra.Command {
 		SilenceUsage: true,
 	}
 
+	cmd.Flags().Uint64(flagParamKey, 0, "param id from store-vk-param (required)")
 	addInstantiatePermissionFlags(cmd)
+	flags.AddTxFlagsToCmd(cmd)
+	return cmd
+}
+
+// StoreFullCircuitCmd uploads params and vk body in one transaction.
+func StoreFullCircuitCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:     "store-full-circuit [params file] [vk body file]",
+		Short:   "Upload params + vk body together",
+		Aliases: []string{"store-full", "sfc"},
+		Args:    cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			clientCtx, err := client.GetClientTxContext(cmd)
+			if err != nil {
+				return err
+			}
+			msg, err := parseStoreFullCircuitArgs(args[0], args[1], clientCtx.GetFromAddress().String(), cmd.Flags())
+			if err != nil {
+				return err
+			}
+			return tx.GenerateOrBroadcastTxCLI(clientCtx, cmd.Flags(), &msg)
+		},
+		SilenceUsage: true,
+	}
+	cmd.Flags().Uint64(flagCircuitType, 0, "prover / circuit type id")
+	cmd.Flags().Uint64(flagCurveType, 0, "curve type id")
+	cmd.Flags().Uint64(flagK, 0, "halo2 k (required, non-zero)")
 	flags.AddTxFlagsToCmd(cmd)
 	return cmd
 }
@@ -156,46 +190,68 @@ func StoreCodeCmd() *cobra.Command {
 	return cmd
 }
 
-// Prepares MsgStoreCode object from flags with gzipped wasm byte code field
-func parseStoreCodeWithCircuitArgs(wasmfile, vkfile, sender string, flags *flag.FlagSet) (types.MsgStoreCodeWithCircuit, error) {
-	wasm, err := os.ReadFile(wasmfile)
+func parseCircuitParamAuthFlags(flags *flag.FlagSet) (*types.CircuitParamAuth, error) {
+	circuitType, err := flags.GetUint64(flagCircuitType)
 	if err != nil {
-		return types.MsgStoreCodeWithCircuit{}, err
+		return nil, err
 	}
-	vk, err := os.ReadFile(vkfile)
+	curveType, err := flags.GetUint64(flagCurveType)
 	if err != nil {
-		return types.MsgStoreCodeWithCircuit{}, err
+		return nil, err
+	}
+	k, err := flags.GetUint64(flagK)
+	if err != nil {
+		return nil, err
+	}
+	return &types.CircuitParamAuth{
+		CircuitType: circuitType,
+		CurveType:   curveType,
+		K:           k,
+	}, nil
+}
+
+func parseStoreVkParamArgs(paramFile, sender string, flags *flag.FlagSet) (types.MsgStoreVkParam, error) {
+	params, err := os.ReadFile(paramFile)
+	if err != nil {
+		return types.MsgStoreVkParam{}, err
+	}
+	if ioutils.IsGzip(params) {
+		// leave gzipped; keeper uncompresses
+	} else if len(params) == 0 {
+		return types.MsgStoreVkParam{}, errors.New("empty param file")
 	}
 
-	// gzip the wasm file
-	if ioutils.IsWasm(wasm) {
-		wasm, err = ioutils.GzipIt(wasm)
-		if err != nil {
-			return types.MsgStoreCodeWithCircuit{}, err
-		}
-	} else if !ioutils.IsGzip(wasm) {
-		return types.MsgStoreCodeWithCircuit{}, errors.New("invalid input file. Use wasm binary or gzip")
-	}
-	// // gzip the vk file
-	// if ioutils.IsWasm(vk) {
-	// 	vk, err = ioutils.GzipIt(vk)
-	// 	if err != nil {
-	// 		return types.MsgStoreCodeWithCircuit{}, err
-	// 	}
-	// } else if !ioutils.IsGzip(vk) {
-	// 	return types.MsgStoreCodeWithCircuit{}, errors.New("invalid input file. Use wasm binary or gzip")
-	// }
-
-	perm, err := parseAccessConfigFlags(flags)
+	auth, err := parseCircuitParamAuthFlags(flags)
 	if err != nil {
-		return types.MsgStoreCodeWithCircuit{}, err
+		return types.MsgStoreVkParam{}, err
 	}
 
-	msg := types.MsgStoreCodeWithCircuit{
-		Sender:                sender,
-		WASMByteCode:          wasm,
-		CircuitBinaryFile:     vk,
-		InstantiatePermission: perm,
+	msg := types.MsgStoreVkParam{
+		Sender:           sender,
+		CircuitParamAuth: auth,
+		CsParam:          params,
+	}
+	return msg, msg.ValidateBasic()
+}
+
+func parseStoreFullCircuitArgs(paramFile, vkFile, sender string, flags *flag.FlagSet) (types.MsgStoreFullCircuit, error) {
+	params, err := os.ReadFile(paramFile)
+	if err != nil {
+		return types.MsgStoreFullCircuit{}, err
+	}
+	vkBody, err := os.ReadFile(vkFile)
+	if err != nil {
+		return types.MsgStoreFullCircuit{}, err
+	}
+	auth, err := parseCircuitParamAuthFlags(flags)
+	if err != nil {
+		return types.MsgStoreFullCircuit{}, err
+	}
+	msg := types.MsgStoreFullCircuit{
+		Sender:                 sender,
+		Auth:                   auth,
+		CircuitParamBinaryFile: params,
+		CircuitVkBinaryFile:    vkBody,
 	}
 	return msg, msg.ValidateBasic()
 }
@@ -230,22 +286,20 @@ func parseStoreCodeArgs(file, sender string, flags *flag.FlagSet) (types.MsgStor
 	return msg, msg.ValidateBasic()
 }
 
-// Prepares MsgStoreCode object from flags with gzipped wasm byte code field
+// parseStoreCircuitArgs builds MsgStoreCircuit from a vk_body file and --param-key.
 func parseStoreCircuitArgs(file, sender string, flags *flag.FlagSet) (types.MsgStoreCircuit, error) {
-	wasm, err := os.ReadFile(file)
+	vkBody, err := os.ReadFile(file)
 	if err != nil {
 		return types.MsgStoreCircuit{}, err
 	}
 
-	// // gzip the wasm file
-	// if ioutils.IsWasm(wasm) {
-	// 	wasm, err = ioutils.GzipIt(wasm)
-	// 	if err != nil {
-	// 		return types.MsgStoreCircuit{}, err
-	// 	}
-	// } else if !ioutils.IsGzip(wasm) {
-	// 	return types.MsgStoreCircuit{}, errors.New("invalid input file. Use wasm binary or gzip")
-	// }
+	paramKey, err := flags.GetUint64(flagParamKey)
+	if err != nil {
+		return types.MsgStoreCircuit{}, err
+	}
+	if paramKey == 0 {
+		return types.MsgStoreCircuit{}, errors.New("--param-key is required (from store-vk-param)")
+	}
 
 	perm, err := parseAccessConfigFlags(flags)
 	if err != nil {
@@ -254,7 +308,8 @@ func parseStoreCircuitArgs(file, sender string, flags *flag.FlagSet) (types.MsgS
 
 	msg := types.MsgStoreCircuit{
 		Sender:                sender,
-		CircuitBinaryFile:     wasm,
+		CircuitParamKey:       paramKey,
+		CircuitBinaryFile:     vkBody,
 		InstantiatePermission: perm,
 	}
 	return msg, msg.ValidateBasic()

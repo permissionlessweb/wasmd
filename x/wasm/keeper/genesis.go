@@ -27,6 +27,11 @@ func InitGenesis(ctx sdk.Context, keeper *Keeper, data types.GenesisState) ([]ab
 		return nil, errorsmod.Wrapf(err, "set params")
 	}
 
+	// Fail fast: param SHA256 / footer / circuit_key alignment before writing state.
+	if err := validateGenesisParamCircuitCrossRefs(data); err != nil {
+		return nil, errorsmod.Wrap(types.ErrInvalid, err.Error())
+	}
+
 	var maxCodeID uint64
 	for i, code := range data.Codes {
 		err := keeper.importCode(ctx, code.CodeID, code.CodeInfo, code.CodeBytes)
@@ -40,6 +45,22 @@ func InitGenesis(ctx sdk.Context, keeper *Keeper, data types.GenesisState) ([]ab
 			if err := contractKeeper.PinCode(ctx, code.CodeID); err != nil {
 				return nil, errorsmod.Wrapf(err, "contract number %d", i)
 			}
+		}
+	}
+
+	// Standalone params first so StoreParam warms zk_param/ before circuits.
+	var maxParamID uint64
+	for i, p := range data.VkParams {
+		info := types.VkParamInfoResponse{
+			VkID:     p.ParamID,
+			Creator:  p.Creator,
+			DataHash: p.ParamKey,
+		}
+		if err := keeper.importVkParam(ctx, p.ParamID, info, p.ParamBytes); err != nil {
+			return nil, errorsmod.Wrapf(err, "vk_param %d id %d", i, p.ParamID)
+		}
+		if p.ParamID > maxParamID {
+			maxParamID = p.ParamID
 		}
 	}
 
@@ -58,6 +79,7 @@ func InitGenesis(ctx sdk.Context, keeper *Keeper, data types.GenesisState) ([]ab
 			}
 		}
 	}
+	_ = maxParamID // validated via sequence import below when present
 
 	for i, contract := range data.Contracts {
 		contractAddr, err := sdk.AccAddressFromBech32(contract.ContractAddress)
@@ -128,6 +150,65 @@ func ExportGenesis(ctx sdk.Context, keeper *Keeper) *types.GenesisState {
 		return false
 	})
 
+	// Standalone params (StoreVkParam) — raw bytes for StoreParam on import only.
+	// Keyed by param_key so we can backfill from circuits without duplicates.
+	exportedParamKeys := make(map[string]struct{})
+	keeper.IterateVkParamInfos(ctx, func(paramID uint64, info types.VkParamInfoResponse) bool {
+		blob, err := keeper.getVkParamBytes(ctx, paramID)
+		if err != nil {
+			panic(err)
+		}
+		genState.VkParams = append(genState.VkParams, types.VkParam{
+			ParamID:    paramID,
+			ParamKey:   info.DataHash, // 36-byte wasmvm param_key
+			Creator:    info.Creator,
+			ParamBytes: blob,
+		})
+		if len(info.DataHash) == 36 {
+			exportedParamKeys[string(info.DataHash)] = struct{}{}
+		}
+		return false
+	})
+
+	// Export circuits with canonical app-state bytes for state sync / genesis import.
+	// ZkBytes is the source of truth used by InitGenesis → importCircuit → StoreCircuitUnchecked.
+	// Also backfill VkParams for any circuit param half not already exported, so genesis
+	// always satisfies circuit → vk_param cross-references on re-import.
+	nextSyntheticParamID := uint64(0)
+	for _, p := range genState.VkParams {
+		if p.ParamID > nextSyntheticParamID {
+			nextSyntheticParamID = p.ParamID
+		}
+	}
+	keeper.IterateCircuitInfos(ctx, func(zkID uint64, info types.CircuitInfo) bool {
+		blob, err := keeper.GetCircuit(ctx, zkID)
+		if err != nil {
+			panic(err)
+		}
+		genState.Circuits = append(genState.Circuits, types.Circuit{
+			ZkID:    zkID,
+			ZkInfo:  info,
+			ZkBytes: blob,
+			Pinned:  keeper.IsPinnedCircuit(ctx, zkID),
+		})
+		if len(info.CircuitHash) >= 36 {
+			paramHalf := info.CircuitHash[:36]
+			if _, already := exportedParamKeys[string(paramHalf)]; !already {
+				if paramBytes, ok := circuitParamBytes(blob, info); ok {
+					nextSyntheticParamID++
+					genState.VkParams = append(genState.VkParams, types.VkParam{
+						ParamID:    nextSyntheticParamID,
+						ParamKey:   append([]byte(nil), paramHalf...),
+						Creator:    info.Creator,
+						ParamBytes: append([]byte(nil), paramBytes...),
+					})
+					exportedParamKeys[string(paramHalf)] = struct{}{}
+				}
+			}
+		}
+		return false
+	})
+
 	keeper.IterateContractInfo(ctx, func(addr sdk.AccAddress, contract types.ContractInfo) bool {
 		var state []types.Model
 		keeper.IterateContractState(ctx, addr, func(key, value []byte) bool {
@@ -146,7 +227,12 @@ func ExportGenesis(ctx sdk.Context, keeper *Keeper) *types.GenesisState {
 		return false
 	})
 
-	for _, k := range [][]byte{types.KeySequenceCodeID, types.KeySequenceInstanceID} {
+	for _, k := range [][]byte{
+		types.KeySequenceCodeID,
+		types.KeySequenceInstanceID,
+		types.KeySequenceCircuitID,
+		types.KeySequenceVkParamID,
+	} {
 		id, err := keeper.PeekAutoIncrementID(ctx, k)
 		if err != nil {
 			panic(err)

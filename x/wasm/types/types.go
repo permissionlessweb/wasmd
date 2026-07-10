@@ -81,6 +81,34 @@ func NewCircuitInfo(circuitHash []byte, creator sdk.AccAddress, instantiatePermi
 	}
 }
 
+// NewCircuitInfoWithLayout fills CircuitInfo including serialized layout lengths.
+func NewCircuitInfoWithLayout(
+	circuitHash []byte,
+	creator sdk.AccAddress,
+	instantiatePermission AccessConfig,
+	i, paramLen, csLen, vkLen uint64,
+) CircuitInfo {
+	return CircuitInfo{
+		CircuitHash:       circuitHash,
+		Creator:           creator.String(),
+		InstantiateConfig: instantiatePermission,
+		I:                 i,
+		VkpLen:            paramLen,
+		CsLen:             csLen,
+		VkLen:             vkLen,
+	}
+}
+
+// NewVkParamInfo fills metadata for a stored commitment-param set.
+// dataHash is the content hash of the param bytes (not the raw params).
+func NewVkParamInfo(paramID uint64, dataHash []byte, creator sdk.AccAddress) VkParamInfoResponse {
+	return VkParamInfoResponse{
+		VkID:     paramID,
+		Creator:  creator.String(),
+		DataHash: dataHash,
+	}
+}
+
 var AllCodeHistoryTypes = []ContractCodeHistoryOperationType{ContractCodeHistoryOperationTypeGenesis, ContractCodeHistoryOperationTypeInit, ContractCodeHistoryOperationTypeMigrate}
 
 // NewContractInfo creates a new instance of a given WASM contract info

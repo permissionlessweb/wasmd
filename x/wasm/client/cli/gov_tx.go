@@ -40,7 +40,7 @@ func SubmitProposalCmd() *cobra.Command {
 	cmd.AddCommand(
 		ProposalStoreCodeCmd(),
 		ProposalStoreCircuitCmd(),
-		ProposalStoreCodeWithCircuitCmd(),
+		// ProposalStoreCodeWithCircuitCmd removed: use store-full-circuit / store-vk-param + store-circuit
 		ProposalInstantiateContractCmd(),
 		ProposalInstantiateContract2Cmd(),
 		ProposalStoreAndInstantiateContractCmd(),
@@ -105,8 +105,8 @@ func ProposalStoreCodeCmd() *cobra.Command {
 
 func ProposalStoreCircuitCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "circuit-store [circuit binary file] --title [text] --summary [text] --authority [address]",
-		Short: "Submit a circuit binary proposal",
+		Use:   "circuit-store [vk body file] --param-key [id] --title [text] --summary [text] --authority [address]",
+		Short: "Submit a store-circuit proposal (vk body + existing param id)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			clientCtx, proposalTitle, summary, deposit, expedite, err := getProposalInfo(cmd)
@@ -136,46 +136,7 @@ func ProposalStoreCircuitCmd() *cobra.Command {
 		},
 		SilenceUsage: true,
 	}
-	addInstantiatePermissionFlags(cmd)
-
-	// proposal flags
-	addCommonProposalFlags(cmd)
-	return cmd
-}
-
-func ProposalStoreCodeWithCircuitCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "wasm-store-with-circuit [wasm file] [circuit binary file] --title [text] --summary [text] --authority [address]",
-		Short: "Submit a wasm & circuit binary proposal",
-		Args:  cobra.ExactArgs(2),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			clientCtx, proposalTitle, summary, deposit, expedite, err := getProposalInfo(cmd)
-			if err != nil {
-				return err
-			}
-			authority, err := cmd.Flags().GetString(flagAuthority)
-			if err != nil {
-				return fmt.Errorf("authority: %s", err)
-			}
-
-			if len(authority) == 0 {
-				return errors.New("authority address is required")
-			}
-
-			storeWasmWithCircuitMsg, err := parseStoreCodeWithCircuitArgs(args[0], args[1], authority, cmd.Flags())
-			if err != nil {
-				return err
-			}
-
-			proposalMsg, err := v1.NewMsgSubmitProposal([]sdk.Msg{&storeWasmWithCircuitMsg}, deposit, clientCtx.GetFromAddress().String(), "", proposalTitle, summary, expedite)
-			if err != nil {
-				return err
-			}
-
-			return tx.GenerateOrBroadcastTxCLI(clientCtx, cmd.Flags(), proposalMsg)
-		},
-		SilenceUsage: true,
-	}
+	cmd.Flags().Uint64(flagParamKey, 0, "param id from store-vk-param (required)")
 	addInstantiatePermissionFlags(cmd)
 
 	// proposal flags

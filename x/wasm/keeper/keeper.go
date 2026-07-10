@@ -3,6 +3,7 @@ package keeper
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
@@ -116,6 +117,50 @@ type Keeper struct {
 
 	// wasmLimits contains the limits sent to wasmvm on init
 	wasmLimits wasmvmtypes.WasmLimits
+}
+
+// GetVkInfo implements [types.ViewKeeper].
+// VKs are addressed via CircuitInfo (zk_id); this is an alias for GetCircuitInfo.
+func (k Keeper) GetVkInfo(ctx context.Context, vkID uint64) *types.CircuitInfo {
+	return k.GetCircuitInfo(ctx, vkID)
+}
+
+// GetVk implements [types.ViewKeeper].
+// Returns the reconstructed circuit blob (params+cs+vk) from wasmvm when available.
+func (k Keeper) GetVk(ctx context.Context, vkID uint64) ([]byte, error) {
+	return k.GetCircuit(ctx, vkID)
+}
+
+// GetVkParam deliberately does not expose raw param bytes over the public
+// ViewKeeper surface. Params remain available only for internal reconstruction.
+func (k Keeper) GetVkParam(_ context.Context, _ uint64) ([]byte, error) {
+	return nil, errorsmod.Wrap(types.ErrInvalid, "raw param bytes are not queryable; use VkParamInfo for checksums and metadata")
+}
+
+// GetVkParamInfo returns param metadata (checksums / creator). Never raw bytes.
+func (k Keeper) GetVkParamInfo(ctx context.Context, vkParamID uint64) *types.VkParamInfoResponse {
+	store := k.storeService.OpenKVStore(ctx)
+	var vkParamInfo types.VkParamInfoResponse
+	vkParamInfoBz, err := store.Get(types.GetVkParamId(vkParamID))
+	if err != nil || vkParamInfoBz == nil {
+		return nil
+	}
+	k.cdc.MustUnmarshal(vkParamInfoBz, &vkParamInfo)
+	return &vkParamInfo
+}
+
+// getVkParamBytes loads raw param bytes for internal circuit reconstruction only.
+// Must not be wired to any public query path.
+func (k Keeper) getVkParamBytes(ctx context.Context, vkParamID uint64) ([]byte, error) {
+	store := k.storeService.OpenKVStore(ctx)
+	bz, err := store.Get(types.GetVkParamBytesKey(vkParamID))
+	if err != nil {
+		return nil, err
+	}
+	if bz == nil {
+		return nil, types.ErrNotFound.Wrapf("vk param bytes %d", vkParamID)
+	}
+	return bz, nil
 }
 
 func (k Keeper) getUploadAccessConfig(ctx context.Context) types.AccessConfig {
@@ -258,19 +303,10 @@ func (k Keeper) create_with_circuit(ctx context.Context, creator sdk.AccAddress,
 	k.mustStoreCodeInfo(sdkCtx, codeID, codeInfo)
 	k.mustStoreCircuitInfo(sdkCtx, uint64(zkIDUint32), vkInfo)
 
-	// Store circuit binary in app state for contract access during initialization
-	// The contract will retrieve this during instantiation and store it in its own state.
-	// The handler will then look up the circuit from the contract's state using the checksum key.
-	store := k.storeService.OpenKVStore(sdkCtx)
-	k.Logger(sdkCtx).Debug("storing circuit binary in app state",
-		"checksum", hex.EncodeToString(checksums[1]),
-		"circuit_binary_size", len(vkCode),
-	)
-	if err := store.Set(checksums[1], vkCode); err != nil {
-		k.Logger(sdkCtx).Error("DEBUG: failed to store circuit binary in app state", "error", err)
+	// Canonical app-state blob by zk_id (same discipline as store_circuit).
+	if err := k.mustStoreCircuitBytes(sdkCtx, uint64(zkIDUint32), vkCode); err != nil {
 		return 0, 0, nil, err
 	}
-	k.Logger(sdkCtx).Debug("circuit binary stored successfully in app state for contract retrieval")
 
 	evt := sdk.NewEvent(
 		types.EventTypeStoreCodeWithCircuit,
@@ -355,40 +391,169 @@ func (k Keeper) create(ctx context.Context, creator sdk.AccAddress, wasmCode []b
 	return codeID, checksum, nil
 }
 
-// store_circuit stores only circuit/VK code (standalone circuit upload)
-func (k Keeper) store_circuit(ctx context.Context, creator sdk.AccAddress, circuitBinary []byte, instantiateAccess *types.AccessConfig, authZ types.AuthorizationPolicy) (zkID uint64, checksum []byte, err error) {
+// store_vk_param stores reusable commitment params.
+// Raw bytes are written to an internal key; public queries only expose metadata.
+func (k Keeper) store_vk_param(
+	ctx context.Context,
+	creator sdk.AccAddress,
+	auth *types.CircuitParamAuth,
+	paramBytes []byte,
+	authZ types.AuthorizationPolicy,
+) (paramID uint64, checksum []byte, err error) {
+	if creator == nil {
+		return 0, nil, errorsmod.Wrap(sdkerrors.ErrInvalidAddress, "cannot be nil")
+	}
+	if auth == nil {
+		return 0, nil, errorsmod.Wrap(sdkerrors.ErrInvalidRequest, "circuit param auth is required")
+	}
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	defaultAccessConfig := k.getInstantiateAccessConfig(sdkCtx).With(creator)
+	chainConfigs := types.ChainAccessConfigs{
+		Instantiate: defaultAccessConfig,
+		Upload:      k.getCircuitUploadAccessConfig(sdkCtx),
+	}
+	if !authZ.CanCreateCode(chainConfigs, creator, defaultAccessConfig) {
+		return 0, nil, errorsmod.Wrap(sdkerrors.ErrUnauthorized, "can not store vk params")
+	}
+
+	if ioutils.IsGzip(paramBytes) {
+		sdkCtx.GasMeter().ConsumeGas(k.gasRegister.UncompressCosts(len(paramBytes)), "Uncompress gzip param bytes")
+		paramBytes, err = ioutils.Uncompress(paramBytes, int64(types.MaxCircuitSize))
+		if err != nil {
+			return 0, nil, types.ErrCreateFailed.Wrap(errorsmod.Wrap(err, "uncompress param archive").Error())
+		}
+	}
+	if len(paramBytes) == 0 {
+		return 0, nil, errorsmod.Wrap(sdkerrors.ErrInvalidRequest, "empty param bytes")
+	}
+
+	// Populate wasmvm zk_param/ + pinned CachedParam. Returns 36-byte param_key:
+	// [appstate_key_le 4][sha256(params) 32]. Idempotent if the file already exists.
+	paramKey, err := k.wasmVM.StoreParam(paramBytes)
+	if err != nil {
+		return 0, nil, errorsmod.Wrap(types.ErrCreateFailed, err.Error())
+	}
+	if len(paramKey) != 36 {
+		return 0, nil, types.ErrCreateFailed.Wrapf("StoreParam returned %d-byte key, want 36", len(paramKey))
+	}
+	// Return value for MsgStoreVkParamResponse: prefer full param_key so clients
+	// can match circuit footers without recomputing appstate_key.
+	checksum = paramKey
+
+	paramID = k.mustAutoIncrementID(sdkCtx, types.KeySequenceVkParamID)
+	// DataHash holds the full 36-byte param_key (not bare 32-byte sha256) for cold-path reconstruction.
+	info := types.NewVkParamInfo(paramID, paramKey, creator)
+	k.mustStoreVkParamInfo(sdkCtx, paramID, info)
+
+	// Canonical app-state blob for genesis / state sync (queries never expose this).
+	store := k.storeService.OpenKVStore(sdkCtx)
+	if err := store.Set(types.GetVkParamBytesKey(paramID), paramBytes); err != nil {
+		return 0, nil, err
+	}
+
+	// Gas: size-based meter + wasmvm write (StoreParam has no separate gas return yet).
+	sdkCtx.GasMeter().ConsumeGas(k.gasRegister.UncompressCosts(len(paramBytes)), "store vk params")
+
+	k.Logger(sdkCtx).Debug("storing new vk params",
+		"param_id", paramID,
+		"k", auth.K,
+		"circuit_type", auth.CircuitType,
+		"curve_type", auth.CurveType,
+		"param_len", len(paramBytes),
+		"param_key", hex.EncodeToString(paramKey),
+	)
+
+	sdkCtx.EventManager().EmitEvent(sdk.NewEvent(
+		types.EventTypeStoreVkParam,
+		sdk.NewAttribute(types.AttributeKeyParamID, strconv.FormatUint(paramID, 10)),
+		sdk.NewAttribute(types.AttributeKeyParamChecksum, hex.EncodeToString(paramKey)),
+	))
+
+	return paramID, checksum, nil
+}
+
+// store_circuit stores a VK (cs+vk[+footer]) that references previously uploaded params.
+// paramID is the sequential app-state id from StoreVkParam (MsgStoreCircuit.param_key).
+// vkBody is expected to be [cs][vk][footer] OR a full monolithic [params][cs][vk][footer]
+// when params are already included (legacy full-blob path with paramID=0 is not used here).
+func (k Keeper) store_circuit(
+	ctx context.Context,
+	creator sdk.AccAddress,
+	paramID uint64,
+	vkBody []byte,
+	instantiateAccess *types.AccessConfig,
+	authZ types.AuthorizationPolicy,
+) (zkID uint64, checksum []byte, err error) {
 	if creator == nil {
 		return 0, checksum, errorsmod.Wrap(sdkerrors.ErrInvalidAddress, "cannot be nil")
 	}
+	if paramID == 0 {
+		return 0, checksum, errorsmod.Wrap(sdkerrors.ErrInvalidRequest, "param_key is required")
+	}
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
-	// figure out proper instantiate access
 	defaultAccessConfig := k.getInstantiateAccessConfig(sdkCtx).With(creator)
 	if instantiateAccess == nil {
 		instantiateAccess = &defaultAccessConfig
 	}
 	chainConfigs := types.ChainAccessConfigs{
 		Instantiate: defaultAccessConfig,
-		Upload:      k.getUploadAccessConfig(sdkCtx),
+		Upload:      k.getCircuitUploadAccessConfig(sdkCtx),
 	}
-
 	if !authZ.CanCreateCode(chainConfigs, creator, *instantiateAccess) {
-		return 0, checksum, errorsmod.Wrap(sdkerrors.ErrUnauthorized, "can not create code")
+		return 0, checksum, errorsmod.Wrap(sdkerrors.ErrUnauthorized, "can not create circuit")
 	}
 
-	if ioutils.IsGzip(circuitBinary) {
-		sdkCtx.GasMeter().ConsumeGas(k.gasRegister.UncompressCosts(len(circuitBinary)), "Uncompress gzip circuit binary")
-		circuitBinary, err = ioutils.Uncompress(circuitBinary, int64(types.MaxWasmSize))
+	paramInfo := k.GetVkParamInfo(sdkCtx, paramID)
+	if paramInfo == nil {
+		return 0, checksum, types.ErrNotFound.Wrapf("vk param %d", paramID)
+	}
+	paramBytes, err := k.getVkParamBytes(sdkCtx, paramID)
+	if err != nil {
+		return 0, checksum, err
+	}
+	// Integrity vs stored key: DataHash is the 36-byte param_key (last 32 = sha256).
+	sum := sha256.Sum256(paramBytes)
+	switch len(paramInfo.DataHash) {
+	case 36:
+		if !bytes.Equal(sum[:], paramInfo.DataHash[4:]) {
+			return 0, checksum, types.ErrInvalid.Wrap("stored param bytes do not match param_key checksum")
+		}
+	case 32:
+		// legacy metadata stored bare sha256 only
+		if !bytes.Equal(sum[:], paramInfo.DataHash) {
+			return 0, checksum, types.ErrInvalid.Wrap("stored param bytes do not match param checksum")
+		}
+	default:
+		return 0, checksum, types.ErrInvalid.Wrapf("unexpected param key length %d", len(paramInfo.DataHash))
+	}
+	// Ensure wasmvm zk_param/ + pinned cache are warm (idempotent if already present).
+	if _, err := k.wasmVM.StoreParam(paramBytes); err != nil {
+		return 0, checksum, errorsmod.Wrap(types.ErrCreateFailed, err.Error())
+	}
+
+	if ioutils.IsGzip(vkBody) {
+		sdkCtx.GasMeter().ConsumeGas(k.gasRegister.UncompressCosts(len(vkBody)), "Uncompress gzip vk body")
+		vkBody, err = ioutils.Uncompress(vkBody, int64(types.MaxCircuitSize))
 		if err != nil {
-			return 0, checksum, types.ErrCreateFailed.Wrap(errorsmod.Wrap(err, "uncompress circuit archive").Error())
+			return 0, checksum, types.ErrCreateFailed.Wrap(errorsmod.Wrap(err, "uncompress vk body").Error())
 		}
 	}
+	if len(vkBody) == 0 {
+		return 0, checksum, errorsmod.Wrap(sdkerrors.ErrInvalidRequest, "empty vk_body")
+	}
+
+	// Reconstruct monolithic circuit blob for wasmvm: [params][cs+vk+footer]
+	// Callers must supply vk_body such that concatenation yields a valid footer layout
+	// (param_len / checksums matching the stored params).
+	circuitBinary := make([]byte, 0, len(paramBytes)+len(vkBody))
+	circuitBinary = append(circuitBinary, paramBytes...)
+	circuitBinary = append(circuitBinary, vkBody...)
 
 	gasLeft := k.runtimeGasForContract(sdkCtx)
 	var gasUsed uint64
 	isSimulation := sdkCtx.ExecMode() == sdk.ExecModeSimulate
 	var vmChecksum wasmvm.Checksum
 	if isSimulation {
-		// only simulate storing the circuit, no files are written
 		vmChecksum, gasUsed, err = k.wasmVM.SimulateStoreCircuit(circuitBinary, gasLeft)
 	} else {
 		vmChecksum, gasUsed, err = k.wasmVM.StoreCircuit(circuitBinary, gasLeft)
@@ -398,34 +563,114 @@ func (k Keeper) store_circuit(ctx context.Context, creator sdk.AccAddress, circu
 		return 0, checksum, errorsmod.Wrap(types.ErrCreateFailed, err.Error())
 	}
 	checksum = []byte(vmChecksum)
+	// Circuit key is the wasmvm Path A key (typically 72 bytes). Store it once
+	// in CircuitInfo so CircuitInfo queries stay pure KV lookups.
+	if len(checksum) == 0 {
+		return 0, checksum, types.ErrCreateFailed.Wrap("empty circuit key from wasmvm")
+	}
 
-	zkID = uint64(k.mustAutoIncrementIDUint32(sdkCtx, types.KeySequenceCircuitID))
-	k.Logger(sdkCtx).Debug("storing new circuit", "zk_id", zkID)
-	zkInfo := types.NewCircuitInfo(checksum, creator, *instantiateAccess)
-	k.mustStoreCircuitInfo(sdkCtx, zkID, zkInfo)
-
-	// Store circuit binary in app state for contract access during initialization
-	// The contract will retrieve this during instantiation and store it in its own state.
-	// The handler will then look up the circuit from the contract's state using the checksum key.
-	store := k.storeService.OpenKVStore(sdkCtx)
-	k.Logger(sdkCtx).Debug("storing circuit binary in app state",
-		"checksum", hex.EncodeToString(checksum),
-		"circuit_binary_size", len(circuitBinary),
+	zkID = k.mustAutoIncrementID(sdkCtx, types.KeySequenceCircuitID)
+	zkInfo := types.NewCircuitInfoWithLayout(
+		checksum,
+		creator,
+		*instantiateAccess,
+		0,
+		uint64(len(paramBytes)),
+		0, // cs_len filled by clients via footer; optional metadata
+		uint64(len(vkBody)),
 	)
-	if err := store.Set(checksum, circuitBinary); err != nil {
-		k.Logger(sdkCtx).Error("DEBUG: failed to store circuit binary in app state", "error", err)
+	k.mustStoreCircuitInfo(sdkCtx, zkID, zkInfo)
+	k.mustStoreCircuitParamRef(sdkCtx, zkID, paramID)
+	// Canonical app-state blob for genesis / state sync / cold-path WasmQuery::Circuit.
+	// Hot path never reads this — Path A uses CircuitHash + wasmvm cache only.
+	if err := k.mustStoreCircuitBytes(sdkCtx, zkID, circuitBinary); err != nil {
 		return 0, checksum, err
 	}
-	k.Logger(sdkCtx).Debug(" circuit binary stored successfully in app state for contract retrieval")
-	// TODO
-	evt := sdk.NewEvent(
+
+	k.Logger(sdkCtx).Debug("storing new circuit",
+		"zk_id", zkID,
+		"param_id", paramID,
+		"circuit_key", hex.EncodeToString(checksum),
+		"circuit_key_len", len(checksum),
+		"param_len", len(paramBytes),
+		"vk_body_len", len(vkBody),
+		"blob_len", len(circuitBinary),
+	)
+
+	sdkCtx.EventManager().EmitEvent(sdk.NewEvent(
 		types.EventTypeStoreCircuit,
 		sdk.NewAttribute(types.AttributeKeyCircuitChecksum, hex.EncodeToString(checksum)),
 		sdk.NewAttribute(types.AttributeKeyZkID, strconv.FormatUint(zkID, 10)),
-	)
-	sdkCtx.EventManager().EmitEvent(evt)
+		sdk.NewAttribute(types.AttributeKeyParamID, strconv.FormatUint(paramID, 10)),
+		sdk.NewAttribute(types.AttributeKeyParamChecksum, hex.EncodeToString(paramInfo.DataHash)),
+	))
 
 	return zkID, checksum, nil
+}
+
+// store_full_circuit is a convenience: StoreVkParam then StoreCircuit.
+func (k Keeper) store_full_circuit(
+	ctx context.Context,
+	creator sdk.AccAddress,
+	auth *types.CircuitParamAuth,
+	paramBytes, vkBody []byte,
+	authZ types.AuthorizationPolicy,
+) (paramID, zkID uint64, paramChecksum, circuitChecksum []byte, err error) {
+	paramID, paramChecksum, err = k.store_vk_param(ctx, creator, auth, paramBytes, authZ)
+	if err != nil {
+		return 0, 0, nil, nil, err
+	}
+	zkID, circuitChecksum, err = k.store_circuit(ctx, creator, paramID, vkBody, nil, authZ)
+	if err != nil {
+		return 0, 0, nil, nil, err
+	}
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	sdkCtx.EventManager().EmitEvent(sdk.NewEvent(
+		types.EventTypeStoreFullCircuit,
+		sdk.NewAttribute(types.AttributeKeyParamID, strconv.FormatUint(paramID, 10)),
+		sdk.NewAttribute(types.AttributeKeyZkID, strconv.FormatUint(zkID, 10)),
+		sdk.NewAttribute(types.AttributeKeyParamChecksum, hex.EncodeToString(paramChecksum)),
+		sdk.NewAttribute(types.AttributeKeyCircuitChecksum, hex.EncodeToString(circuitChecksum)),
+	))
+	return paramID, zkID, paramChecksum, circuitChecksum, nil
+}
+
+func (k Keeper) getCircuitUploadAccessConfig(ctx context.Context) types.AccessConfig {
+	p := k.GetParams(ctx)
+	// Prefer dedicated circuit upload policy when set; fall back to code upload.
+	if p.CircuitUploadAccess.Permission != types.AccessTypeUnspecified {
+		return p.CircuitUploadAccess
+	}
+	return p.CodeUploadAccess
+}
+
+func (k Keeper) mustStoreVkParamInfo(ctx context.Context, paramID uint64, info types.VkParamInfoResponse) {
+	store := k.storeService.OpenKVStore(ctx)
+	if err := store.Set(types.GetVkParamId(paramID), k.cdc.MustMarshal(&info)); err != nil {
+		panic(err)
+	}
+}
+
+// CircuitParamRefPrefix maps zk_id -> param_id (uint64 BE).
+var circuitParamRefPrefix = []byte{0x17}
+
+func (k Keeper) mustStoreCircuitParamRef(ctx context.Context, zkID, paramID uint64) {
+	store := k.storeService.OpenKVStore(ctx)
+	key := append(append([]byte{}, circuitParamRefPrefix...), sdk.Uint64ToBigEndian(zkID)...)
+	if err := store.Set(key, sdk.Uint64ToBigEndian(paramID)); err != nil {
+		panic(err)
+	}
+}
+
+// GetCircuitParamID returns the param_id referenced by a circuit, if recorded.
+func (k Keeper) GetCircuitParamID(ctx context.Context, zkID uint64) (uint64, bool) {
+	store := k.storeService.OpenKVStore(ctx)
+	key := append(append([]byte{}, circuitParamRefPrefix...), sdk.Uint64ToBigEndian(zkID)...)
+	bz, err := store.Get(key)
+	if err != nil || bz == nil || len(bz) != 8 {
+		return 0, false
+	}
+	return sdk.BigEndianToUint64(bz), true
 }
 
 func (k Keeper) mustStoreCodeInfo(ctx context.Context, codeID uint64, codeInfo types.CodeInfo) {
@@ -439,11 +684,60 @@ func (k Keeper) mustStoreCodeInfo(ctx context.Context, codeID uint64, codeInfo t
 
 func (k Keeper) mustStoreCircuitInfo(ctx context.Context, vkID uint64, circuitInfo types.CircuitInfo) {
 	store := k.storeService.OpenKVStore(ctx)
-	// 0x16 | vkID (uint64) -> CircuitInfo
+	// 0x16 | zkID (uint64) -> CircuitInfo (includes CircuitHash / 72-byte Path A key)
 	err := store.Set(types.GetCircuitKey(vkID), k.cdc.MustMarshal(&circuitInfo))
 	if err != nil {
 		panic(err)
 	}
+}
+
+// mustStoreCircuitBytes persists the monolithic circuit blob as canonical chain state.
+// Used for genesis export, state sync, and cold-path queries — not the proof hot path.
+func (k Keeper) mustStoreCircuitBytes(ctx context.Context, zkID uint64, blob []byte) error {
+	store := k.storeService.OpenKVStore(ctx)
+	return store.Set(types.GetCircuitBytesKey(zkID), blob)
+}
+
+// removeCircuit deletes app-state circuit metadata + blob and unpins the wasmvm entry.
+// Mirrors RemoveCode's unpin discipline so PinnedMemoryCache does not retain dead weight.
+func (k Keeper) removeCircuit(ctx context.Context, zkID uint64) error {
+	zkInfo := k.GetCircuitInfo(ctx, zkID)
+	if zkInfo == nil {
+		return types.ErrNoSuchCircuitFn(zkID).Wrapf("zk id %d", zkID)
+	}
+
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	// Always unpin while CircuitHash is still available (no-op if not pinned).
+	if err := k.wasmVM.UnpinCircuit(zkInfo.CircuitHash); err != nil {
+		k.Logger(sdkCtx).Debug("wasmvm UnpinCircuit during remove", "zk_id", zkID, "err", err)
+	}
+	store := k.storeService.OpenKVStore(ctx)
+	_ = store.Delete(types.GetPinnedCircuitIndexPrefix(zkID))
+
+	// Drop compiled/cached entry when the engine supports full remove.
+	if rem, ok := k.wasmVM.(interface {
+		RemoveCircuit(checksum wasmvm.Checksum) error
+	}); ok {
+		if err := rem.RemoveCircuit(zkInfo.CircuitHash); err != nil {
+			k.Logger(sdkCtx).Debug("wasmvm RemoveCircuit", "err", err)
+		}
+	}
+
+	if err := store.Delete(types.GetCircuitKey(zkID)); err != nil {
+		return err
+	}
+	if err := store.Delete(types.GetCircuitBytesKey(zkID)); err != nil {
+		return err
+	}
+	paramRefKey := append(append([]byte{}, circuitParamRefPrefix...), sdk.Uint64ToBigEndian(zkID)...)
+	_ = store.Delete(paramRefKey)
+
+	sdkCtx.EventManager().EmitEvent(sdk.NewEvent(
+		types.EventTypeUnpinCircuit,
+		sdk.NewAttribute(types.AttributeKeyZkID, strconv.FormatUint(zkID, 10)),
+		sdk.NewAttribute(types.AttributeKeyCircuitChecksum, hex.EncodeToString(zkInfo.CircuitHash)),
+	))
+	return nil
 }
 
 func (k Keeper) importCode(ctx context.Context, codeID uint64, codeInfo types.CodeInfo, wasmCode []byte) error {
@@ -475,6 +769,9 @@ func (k Keeper) importCode(ctx context.Context, codeID uint64, codeInfo types.Co
 	return store.Set(key, k.cdc.MustMarshal(&codeInfo))
 }
 
+// cosmwasm circuit footer size for dual param/vk checksum layout.
+const cosmwasmFooterLength = 80
+
 func (k Keeper) importCircuit(ctx context.Context, zkID uint64, zkInfo types.CircuitInfo, zkBinary []byte) error {
 	if ioutils.IsGzip(zkBinary) {
 		var err error
@@ -483,6 +780,25 @@ func (k Keeper) importCircuit(ctx context.Context, zkID uint64, zkInfo types.Cir
 			return types.ErrCreateFailed.Wrap(errorsmod.Wrap(err, "uncompress wasm archive").Error())
 		}
 	}
+
+	// Genesis integrity: params in the blob must produce the param_key the circuit expects.
+	// Catch mismatch here instead of at first proof verification.
+	if err := validateCircuitParamAlignment(zkBinary, zkInfo); err != nil {
+		return errorsmod.Wrapf(err, "circuit zk_id %d param alignment", zkID)
+	}
+
+	// Warm standalone param cache from the monolithic blob when layout is known.
+	// store_param is idempotent if zk_param/{key}.bin already exists.
+	if paramBytes, ok := circuitParamBytes(zkBinary, zkInfo); ok {
+		paramKey, err := k.wasmVM.StoreParam(paramBytes)
+		if err != nil {
+			return errorsmod.Wrap(types.ErrCreateFailed, err.Error())
+		}
+		if err := assertParamKeyMatchesCircuit(paramKey, zkInfo.CircuitHash); err != nil {
+			return errorsmod.Wrapf(err, "circuit zk_id %d after StoreParam", zkID)
+		}
+	}
+
 	newCircuitHash, err := k.wasmVM.StoreCircuitUnchecked(zkBinary)
 	if err != nil {
 		return errorsmod.Wrap(types.ErrCreateFailed, err.Error())
@@ -500,8 +816,191 @@ func (k Keeper) importCircuit(ctx context.Context, zkID uint64, zkInfo types.Cir
 	if ok {
 		return errorsmod.Wrapf(types.ErrDuplicate, "duplicate circuit: %d", zkID)
 	}
-	// 0x01 | codeID (uint64) -> ContractInfo
-	return store.Set(key, k.cdc.MustMarshal(&zkInfo))
+	// Metadata + canonical blob (for export / cold path after import).
+	if err := store.Set(key, k.cdc.MustMarshal(&zkInfo)); err != nil {
+		return err
+	}
+	return k.mustStoreCircuitBytes(ctx, zkID, zkBinary)
+}
+
+// importVkParam restores a standalone param set (genesis / state sync).
+func (k Keeper) importVkParam(ctx context.Context, paramID uint64, info types.VkParamInfoResponse, paramBytes []byte) error {
+	if len(paramBytes) == 0 {
+		return errorsmod.Wrap(types.ErrInvalid, "empty param bytes")
+	}
+	paramKey, err := k.wasmVM.StoreParam(paramBytes)
+	if err != nil {
+		return errorsmod.Wrap(types.ErrCreateFailed, err.Error())
+	}
+	if len(paramKey) != 36 {
+		return errorsmod.Wrapf(types.ErrInvalid, "StoreParam returned %d-byte key, want 36", len(paramKey))
+	}
+	// Genesis must declare the same key StoreParam derives (or leave empty to accept derived).
+	if len(info.DataHash) == 0 {
+		info.DataHash = paramKey
+	} else if !bytes.Equal(paramKey, info.DataHash) {
+		return errorsmod.Wrapf(types.ErrInvalid,
+			"param_id %d: StoreParam key %x does not match genesis param_key %x",
+			paramID, paramKey, info.DataHash)
+	}
+	info.VkID = paramID
+	k.mustStoreVkParamInfo(ctx, paramID, info)
+	store := k.storeService.OpenKVStore(ctx)
+	return store.Set(types.GetVkParamBytesKey(paramID), paramBytes)
+}
+
+// circuitParamBytes returns the param slice from a monolithic circuit blob.
+func circuitParamBytes(zkBinary []byte, zkInfo types.CircuitInfo) ([]byte, bool) {
+	paramLen := int(zkInfo.VkpLen)
+	if paramLen == 0 && len(zkBinary) >= cosmwasmFooterLength {
+		// Fallback: footer param_len at bytes [len-footer+4 .. len-footer+8] LE
+		footer := zkBinary[len(zkBinary)-cosmwasmFooterLength:]
+		paramLen = int(binary.LittleEndian.Uint32(footer[4:8]))
+	}
+	if paramLen <= 0 || paramLen >= len(zkBinary) {
+		return nil, false
+	}
+	return zkBinary[:paramLen], true
+}
+
+// validateCircuitParamAlignment checks SHA256(params) and (when possible) the
+// 36-byte param_key half of the 72-byte circuit key.
+func validateCircuitParamAlignment(zkBinary []byte, zkInfo types.CircuitInfo) error {
+	paramBytes, ok := circuitParamBytes(zkBinary, zkInfo)
+	if !ok {
+		return nil // nothing to validate
+	}
+	sum := sha256.Sum256(paramBytes)
+
+	// Footer dual-checksum layout: param_checksum is footer[16:48].
+	if len(zkBinary) >= cosmwasmFooterLength {
+		footer := zkBinary[len(zkBinary)-cosmwasmFooterLength:]
+		footerParamChecksum := footer[16:48]
+		if !bytes.Equal(sum[:], footerParamChecksum) {
+			return fmt.Errorf(
+				"param SHA256 %x != footer.param_checksum %x (blob will fail check_circuit)",
+				sum[:], footerParamChecksum,
+			)
+		}
+		// Footer param_len must match slice we used.
+		footerParamLen := binary.LittleEndian.Uint32(footer[4:8])
+		if int(footerParamLen) != len(paramBytes) {
+			return fmt.Errorf(
+				"param slice length %d != footer.param_len %d",
+				len(paramBytes), footerParamLen,
+			)
+		}
+	}
+
+	// CircuitHash is [param_key 36][vk_key 36]; param_key[4:36] is param_checksum.
+	if len(zkInfo.CircuitHash) >= 36 {
+		keyParamChecksum := zkInfo.CircuitHash[4:36]
+		if !bytes.Equal(sum[:], keyParamChecksum) {
+			return fmt.Errorf(
+				"param SHA256 %x != circuit_key param_checksum %x",
+				sum[:], keyParamChecksum,
+			)
+		}
+	}
+	return nil
+}
+
+// assertParamKeyMatchesCircuit checks StoreParam's 36-byte key against the
+// leading half of the 72-byte circuit key (param_key || vk_key).
+func assertParamKeyMatchesCircuit(paramKey, circuitHash []byte) error {
+	if len(paramKey) != 36 {
+		return fmt.Errorf("param_key length %d, want 36", len(paramKey))
+	}
+	if len(circuitHash) < 36 {
+		return nil // legacy short key — skip
+	}
+	if !bytes.Equal(paramKey, circuitHash[:36]) {
+		return fmt.Errorf(
+			"StoreParam key %x does not match circuit_key[:36] %x — params will not load for this circuit",
+			paramKey, circuitHash[:36],
+		)
+	}
+	return nil
+}
+
+// validateGenesisParamCircuitCrossRefs checks param integrity both ways:
+//   - each VkParam: param_key checksum half == SHA256(param_bytes)
+//   - each Circuit: footer/key alignment against embedded params
+//   - each Circuit with a 36-byte param half: must have a matching VkParam entry
+//     whose ParamKey equals circuit_key[:36] and whose bytes match that key
+func validateGenesisParamCircuitCrossRefs(data types.GenesisState) error {
+	// Map 36-byte param_key -> genesis VkParam for O(1) reverse lookup.
+	byKey := make(map[string]types.VkParam, len(data.VkParams))
+	for _, p := range data.VkParams {
+		if len(p.ParamKey) != 36 {
+			return fmt.Errorf(
+				"genesis vk_param id %d: param_key length %d, want 36",
+				p.ParamID, len(p.ParamKey),
+			)
+		}
+		if len(p.ParamBytes) == 0 {
+			return fmt.Errorf("genesis vk_param id %d: empty param_bytes", p.ParamID)
+		}
+		sum := sha256.Sum256(p.ParamBytes)
+		if !bytes.Equal(sum[:], p.ParamKey[4:36]) {
+			return fmt.Errorf(
+				"genesis vk_param id %d: param_key checksum %x != SHA256(param_bytes) %x",
+				p.ParamID, p.ParamKey[4:36], sum[:],
+			)
+		}
+		if prev, dup := byKey[string(p.ParamKey)]; dup {
+			return fmt.Errorf(
+				"genesis vk_param id %d: duplicate param_key %x (also param_id %d)",
+				p.ParamID, p.ParamKey, prev.ParamID,
+			)
+		}
+		byKey[string(p.ParamKey)] = p
+	}
+
+	for _, c := range data.Circuits {
+		if err := validateCircuitParamAlignment(c.ZkBytes, c.ZkInfo); err != nil {
+			return fmt.Errorf("genesis circuit zk_id %d: %w", c.ZkID, err)
+		}
+
+		// Circuits using the 72-byte key layout must declare a matching VkParam.
+		// Legacy short CircuitHash (< 36) skips the cross-ref (pre-param-split era).
+		if len(c.ZkInfo.CircuitHash) < 36 {
+			continue
+		}
+		paramHalf := c.ZkInfo.CircuitHash[:36]
+		vp, ok := byKey[string(paramHalf)]
+		if !ok {
+			return fmt.Errorf(
+				"genesis circuit zk_id %d: circuit_key[:36]=%x has no matching vk_params entry — every circuit param half must be declared in genesis vk_params",
+				c.ZkID, paramHalf,
+			)
+		}
+		// Bytes declared for that VkParam must match the slice embedded in the circuit blob.
+		if paramBytes, ok := circuitParamBytes(c.ZkBytes, c.ZkInfo); ok {
+			if !bytes.Equal(paramBytes, vp.ParamBytes) {
+				return fmt.Errorf(
+					"genesis circuit zk_id %d: embedded params (%d bytes) != vk_param id %d bytes (%d) for param_key %x",
+					c.ZkID, len(paramBytes), vp.ParamID, len(vp.ParamBytes), paramHalf,
+				)
+			}
+		}
+	}
+	return nil
+}
+
+// IterateVkParamInfos walks sequential param IDs that have metadata entries.
+func (k Keeper) IterateVkParamInfos(ctx context.Context, cb func(uint64, types.VkParamInfoResponse) bool) {
+	prefixStore := prefix.NewStore(runtime.KVStoreAdapter(k.storeService.OpenKVStore(ctx)), types.VkParamKeyPrefix)
+	iter := prefixStore.Iterator(nil, nil)
+	defer iter.Close()
+	for ; iter.Valid(); iter.Next() {
+		var info types.VkParamInfoResponse
+		k.cdc.MustUnmarshal(iter.Value(), &info)
+		paramID := binary.BigEndian.Uint64(iter.Key())
+		if cb(paramID, info) {
+			return
+		}
+	}
 }
 
 func (k Keeper) instantiate(
@@ -1499,8 +1998,20 @@ func (k Keeper) IterateCodeInfos(ctx context.Context, cb func(uint64, types.Code
 	}
 }
 
+// GetCircuit returns the canonical monolithic circuit blob for zkID.
+// Prefers app-state bytes (state sync / genesis / cold path source of truth).
+// Falls back to wasmvm disk cache for older nodes that only persisted metadata.
 func (k Keeper) GetCircuit(ctx context.Context, zkID uint64) ([]byte, error) {
 	store := k.storeService.OpenKVStore(ctx)
+
+	// Canonical chain state — required for cold path and export without recompute.
+	if blob, err := store.Get(types.GetCircuitBytesKey(zkID)); err != nil {
+		return nil, err
+	} else if blob != nil {
+		return blob, nil
+	}
+
+	// Migration fallback: older stores only had CircuitInfo + wasmvm files.
 	var circuitInfo types.CircuitInfo
 	zkInfoBz, err := store.Get(types.GetCircuitKey(zkID))
 	if err != nil {
@@ -1510,7 +2021,15 @@ func (k Keeper) GetCircuit(ctx context.Context, zkID uint64) ([]byte, error) {
 		return nil, nil
 	}
 	k.cdc.MustUnmarshal(zkInfoBz, &circuitInfo)
-	return k.wasmVM.GetCircuit(circuitInfo.CircuitHash)
+	blob, err := k.wasmVM.GetCircuit(circuitInfo.CircuitHash)
+	if err != nil {
+		return nil, err
+	}
+	// Backfill app state so future queries and exports do not depend on wasmvm alone.
+	if blob != nil {
+		_ = store.Set(types.GetCircuitBytesKey(zkID), blob)
+	}
+	return blob, nil
 }
 
 func (k Keeper) GetByteCode(ctx context.Context, codeID uint64) ([]byte, error) {
@@ -1615,10 +2134,20 @@ func (k Keeper) unpinCircuit(ctx context.Context, zkID uint64) error {
 	}
 
 	sdk.UnwrapSDKContext(ctx).EventManager().EmitEvent(sdk.NewEvent(
-		types.EventTypeUnpinCode,
-		sdk.NewAttribute(types.AttributeKeyCodeID, strconv.FormatUint(zkID, 10)),
+		types.EventTypeUnpinCircuit,
+		sdk.NewAttribute(types.AttributeKeyZkID, strconv.FormatUint(zkID, 10)),
 	))
 	return nil
+}
+
+// IsPinnedCircuit returns true when zkID is pinned in wasmvm cache
+func (k Keeper) IsPinnedCircuit(ctx context.Context, zkID uint64) bool {
+	store := k.storeService.OpenKVStore(ctx)
+	ok, err := store.Has(types.GetPinnedCircuitIndexPrefix(zkID))
+	if err != nil {
+		panic(err)
+	}
+	return ok
 }
 
 // IsPinnedCode returns true when codeID is pinned in wasmvm cache

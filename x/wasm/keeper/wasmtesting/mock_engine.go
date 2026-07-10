@@ -28,6 +28,7 @@ type MockWasmEngine struct {
 	SimulateStoreCodeFn            func(codeID wasmvm.WasmCode, gasLimit uint64) (wasmvm.Checksum, uint64, error)
 	StoreCircuitFn                 func(zkID wasmvm.CircuitBinary, gasLimit uint64) (wasmvm.Checksum, uint64, error)
 	StoreCircuitUncheckedFn        func(zkID wasmvm.CircuitBinary) (wasmvm.Checksum, error)
+	StoreParamFn                   func(param wasmvm.CircuitBinary) ([]byte, error)
 	SimulateStoreCircuitFn         func(zkID wasmvm.CircuitBinary, gasLimit uint64) (wasmvm.Checksum, uint64, error)
 	SimulateStoreCodeWithCircuitFn func(codeID, vkID wasmvm.WasmCode, gasLimit uint64) ([]wasmvm.Checksum, uint64, error)
 	AnalyzeCodeFn                  func(codeID wasmvm.Checksum) (*wasmvmtypes.AnalysisReport, error)
@@ -164,6 +165,17 @@ func (m *MockWasmEngine) StoreCircuitUnchecked(zkID wasmvm.CircuitBinary) (wasmv
 		panic("not supposed to be called!")
 	}
 	return m.StoreCircuitUncheckedFn(zkID)
+}
+
+func (m *MockWasmEngine) StoreParam(param wasmvm.CircuitBinary) ([]byte, error) {
+	if m.StoreParamFn == nil {
+		// Default: deterministic 36-byte key from sha256 for tests that do not stub it.
+		sum := make([]byte, 36)
+		h := rand.Bytes(32)
+		copy(sum[4:], h)
+		return sum, nil
+	}
+	return m.StoreParamFn(param)
 }
 
 func (m *MockWasmEngine) SimulateStoreCircuit(zkID wasmvm.CircuitBinary, gasLimit uint64) (wasmvm.Checksum, uint64, error) {

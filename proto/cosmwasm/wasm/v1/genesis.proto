@@ -32,6 +32,13 @@ message GenesisState {
     (amino.dont_omitempty) = true,
     (gogoproto.jsontag) = "circuits,omitempty"
   ];
+  // Standalone commitment-param sets (StoreVkParam). Shared across circuits.
+  // Raw bytes are for state sync / StoreParam only — never served by public queries.
+  repeated VkParam vk_params = 6 [
+    (gogoproto.nullable) = false,
+    (amino.dont_omitempty) = true,
+    (gogoproto.jsontag) = "vk_params,omitempty"
+  ];
 }
 
 // Circuit struct encompasses CodeInfo and CircuitBinary
@@ -42,6 +49,15 @@ message Circuit {
   bytes zk_bytes = 3;
   // Pinned to wasmvm cache
   bool pinned = 4;
+}
+
+// VkParam is a standalone commitment-parameter set for genesis / state sync.
+message VkParam {
+  uint64 param_id = 1 [ (gogoproto.customname) = "ParamID" ];
+  // Metadata including the 36-byte param_key in data_hash
+  bytes param_key = 2;
+  string creator = 3 [ (cosmos_proto.scalar) = "cosmos.AddressString" ];
+  bytes param_bytes = 4;
 }
 
 // Code struct encompasses CodeInfo and CodeBytes

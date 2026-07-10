@@ -36,16 +36,48 @@ var (
 	ContractsByCreatorPrefix                       = []byte{0x09}
 	ParamsKey                                      = []byte{0x10}
 	AsyncAckKeyPrefix                              = []byte{0x11}
+	// VkParamKeyPrefix stores VkParamInfo metadata (checksums + auth), never raw param bytes.
+	VkParamKeyPrefix = []byte{0x12}
+	// VkKeyPrefix reserved for future standalone vk metadata by vk_id.
+	VkKeyPrefix = []byte{0x13}
+	// VkParamBytesPrefix stores raw param bytes for internal reconstruction only.
+	// These must never be returned from public query endpoints.
+	VkParamBytesPrefix = []byte{0x14}
 
-	CircuitInfoKeyPrefix      = []byte{0x16}
-	CircuitKeyPrefix          = []byte{0x16}
+	// CircuitInfoKeyPrefix / CircuitKeyPrefix store CircuitInfo metadata by zk_id
+	// (includes the 72-byte CircuitHash key for Path A CircuitInfo queries — pure KV, no recompute).
+	CircuitInfoKeyPrefix = []byte{0x16}
+	CircuitKeyPrefix     = []byte{0x16}
+	// CircuitBytesPrefix stores the canonical monolithic circuit blob [params|cs|vk|footer]
+	// for state sync, genesis export, and cold-path WasmQuery::Circuit / cache repopulation.
+	// Proof hot path must not need this; Path A uses CircuitHash + wasmvm cache only.
+	CircuitBytesPrefix        = []byte{0x19}
 	CircuitsByCreatorPrefix   = []byte{0x18}
 	PinnedCircuitsIndexPrefix = []byte{0x07}
 
 	KeySequenceCircuitID  = append(SequenceKeyPrefix, []byte("lastPlonkishCircuit")...)
+	KeySequenceVkParamID  = append(SequenceKeyPrefix, []byte("lastVkParamId")...)
 	KeySequenceCodeID     = append(SequenceKeyPrefix, []byte("lastCodeId")...)
 	KeySequenceInstanceID = append(SequenceKeyPrefix, []byte("lastContractId")...)
 )
+
+// GetVkParamId constructs the key for VkParamInfo metadata (not raw bytes).
+func GetVkParamId(vkParamId uint64) []byte {
+	vkParamIDBz := sdk.Uint64ToBigEndian(vkParamId)
+	return append(VkParamKeyPrefix, vkParamIDBz...)
+}
+
+// GetVkParamBytesKey constructs the key for raw param bytes (internal only).
+func GetVkParamBytesKey(vkParamId uint64) []byte {
+	vkParamIDBz := sdk.Uint64ToBigEndian(vkParamId)
+	return append(VkParamBytesPrefix, vkParamIDBz...)
+}
+
+// GetVkId constructs the key for retrieving the ID for a Circuits Verifying Key bytes
+func GetVkId(vkId uint64) []byte {
+	vkIDBz := sdk.Uint64ToBigEndian(vkId)
+	return append(VkKeyPrefix, vkIDBz...)
+}
 
 // GetCodeKey constructs the key for retrieving the ID for the WASM code
 func GetCodeKey(codeID uint64) []byte {
@@ -53,16 +85,21 @@ func GetCodeKey(codeID uint64) []byte {
 	return append(CodeKeyPrefix, contractIDBz...)
 }
 
-// GetCircuitKey constructs the key for retrieving the ID for the zk-proof circuit binary
+// GetCircuitKey constructs the key for CircuitInfo metadata by zk_id.
 func GetCircuitKey(zkId uint64) []byte {
 	circuitIdBz := sdk.Uint64ToBigEndian(zkId)
 	return append(CircuitKeyPrefix, circuitIdBz...)
 }
 
-// GetCircuitKey constructs the key for retrieving the ID for the zk-proof circuit binary
+// GetCircuitInfoKey is an alias of GetCircuitKey (metadata lives under 0x16|zk_id).
 func GetCircuitInfoKey(zkId uint64) []byte {
+	return GetCircuitKey(zkId)
+}
+
+// GetCircuitBytesKey constructs the key for the canonical raw circuit blob by zk_id.
+func GetCircuitBytesKey(zkId uint64) []byte {
 	circuitIdBz := sdk.Uint64ToBigEndian(zkId)
-	return append(CircuitInfoKeyPrefix, circuitIdBz...)
+	return append(CircuitBytesPrefix, circuitIdBz...)
 }
 
 // GetContractAddressKey returns the key for the WASM contract instance

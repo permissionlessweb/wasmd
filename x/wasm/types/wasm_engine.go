@@ -37,6 +37,10 @@ type WasmEngine interface {
 	StoreCodeUnchecked(code wasmvm.WasmCode) (wasmvm.Checksum, error)
 	// StoreCircuitUnchecked will compile the circuit binary file and store to both disk and pinned cache.
 	StoreCircuitUnchecked(zk wasmvm.CircuitBinary) (wasmvm.Checksum, error)
+	// StoreParam stores raw halo2 commitment parameters independently (no full circuit).
+	// Writes zk_param/{param_key}.bin and pins CachedParam in memory.
+	// Returns the 36-byte param_key: [appstate_key_le 4][sha256(params) 32].
+	StoreParam(param wasmvm.CircuitBinary) ([]byte, error)
 
 	// SimulateStoreCode works like StoreCode, but does not actually store the code.
 	// Instead, it just does all the validation and compilation steps without storing the result on disk.

@@ -66,9 +66,11 @@ message Params {
   ];
 }
 
-// CircuitInfo is data for the uploaded circuits contents
+// CircuitInfo is metadata for an uploaded circuit (params + cs + vk).
+// Binary content lives in wasmvm; app state keeps identifiers and layout.
 message CircuitInfo {
-  // CodeHash is the unique identifier created by wasmvm
+  // CircuitHash is the wasmvm circuit key (typically 72 bytes:
+  // [param_file_key 36][vk_file_key 36]).
   bytes circuit_hash = 1;
   // Creator address who initially stored the code
   string creator = 2 [ (cosmos_proto.scalar) = "cosmos.AddressString" ];
@@ -77,11 +79,30 @@ message CircuitInfo {
       [ (gogoproto.nullable) = false, (amino.dont_omitempty) = true ];
   // i: instances required during proof verification
   uint64 i = 4;
-  // vkp_len - number of bytes representing vk_params
+  // vkp_len - byte length of commitment params
   uint64 vkp_len = 5;
+  // cs_len - byte length of constraint system
   uint64 cs_len = 6;
-  // vk_len - number of bytes representing vk_len
+  // vk_len - byte length of verifying key
   uint64 vk_len = 7;
+  // param_id references the sequential id of the stored VkParam set
+  // (MsgStoreVkParam response). Cross-ref also stored under prefix 0x17.
+  uint64 param_id = 8 [ (gogoproto.customname) = "ParamID" ];
+}
+
+// VkParamInfo is app-state metadata for a stored commitment-param set.
+// Raw param bytes are never returned from queries — only this metadata.
+message VkParamInfo {
+  uint64 param_id = 1 [ (gogoproto.customname) = "ParamID" ];
+  // Creator who uploaded the params
+  string creator = 2 [ (cosmos_proto.scalar) = "cosmos.AddressString" ];
+  // DataHash is sha256(param_bytes)
+  bytes data_hash = 3;
+  // Auth fields from CircuitParamAuth at upload time
+  uint64 circuit_type = 4;
+  uint64 curve_type = 5;
+  uint64 k = 6;
+  uint64 param_len = 7;
 }
 
 // CodeInfo is data for the uploaded contract WASM code

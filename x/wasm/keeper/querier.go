@@ -37,6 +37,102 @@ type GrpcQuerier struct {
 	queryGasLimit storetypes.Gas
 }
 
+// Vk returns metadata and (when available) the reconstructed circuit blob for a vk/zk id.
+// Note: this is not param raw bytes — params are never returned from queries.
+func (q *GrpcQuerier) Vk(c context.Context, req *types.QueryVkRequest) (*types.QueryVkResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "empty request")
+	}
+	if req.VkId == 0 {
+		return nil, errorsmod.Wrap(types.ErrInvalid, "vk id")
+	}
+	rsp, err := queryCircuit(sdk.UnwrapSDKContext(c), req.VkId, q.keeper)
+	switch {
+	case err != nil:
+		return nil, err
+	case rsp == nil:
+		return nil, types.ErrNoSuchCircuitFn(req.VkId).Wrapf("vk id %d", req.VkId)
+	}
+	return &types.QueryVkResponse{
+		VkInfoResponse: &types.VkInfoResponse{
+			VkID:                  req.VkId,
+			CSId:                  0,
+			Creator:               rsp.Creator,
+			DataHash:              rsp.DataHash,
+			InstantiatePermission: rsp.InstantiatePermission,
+		},
+		Data: rsp.Data,
+	}, nil
+}
+
+// VkInfo returns verifying-key / circuit metadata only (no raw param bytes).
+func (q *GrpcQuerier) VkInfo(c context.Context, req *types.QueryVkInfoRequest) (*types.QueryVkInfoResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "empty request")
+	}
+	if req.VkId == 0 {
+		return nil, errorsmod.Wrap(types.ErrInvalid, "vk id")
+	}
+	info := queryCircuitInfo(sdk.UnwrapSDKContext(c), req.VkId, q.keeper)
+	if info == nil {
+		return nil, types.ErrNoSuchCircuitFn(req.VkId).Wrapf("vk id %d", req.VkId)
+	}
+	paramID, _ := q.circuitParamID(c, req.VkId)
+	return &types.QueryVkInfoResponse{
+		ParamInfo: &types.VkInfoResponse{
+			VkID:                  req.VkId,
+			CSId:                  paramID,
+			Creator:               info.Creator,
+			DataHash:              info.DataHash,
+			InstantiatePermission: info.InstantiatePermission,
+		},
+	}, nil
+}
+
+// VkParam returns param *metadata only*. Raw param bytes are intentionally omitted.
+func (q *GrpcQuerier) VkParam(c context.Context, req *types.QueryVkParamRequest) (*types.QueryVkParamResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "empty request")
+	}
+	if req.ParamId == 0 {
+		return nil, errorsmod.Wrap(types.ErrInvalid, "param id")
+	}
+	info := queryVkParamInfo(sdk.UnwrapSDKContext(c), req.ParamId, q.keeper)
+	if info == nil || info.ParamInfo == nil {
+		return nil, types.ErrNotFound.Wrapf("vk param %d", req.ParamId)
+	}
+	// Data is always empty: public API must never return raw param bytes.
+	return &types.QueryVkParamResponse{
+		VkInfoResponse: info.ParamInfo,
+		Data:           nil,
+	}, nil
+}
+
+// VkParamInfo returns checksums and creator for a stored param set.
+func (q *GrpcQuerier) VkParamInfo(c context.Context, req *types.QueryVkParamInfoRequest) (*types.QueryVkParamInfoResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, "empty request")
+	}
+	if req.ParamId == 0 {
+		return nil, errorsmod.Wrap(types.ErrInvalid, "param id")
+	}
+	info := queryVkParamInfo(sdk.UnwrapSDKContext(c), req.ParamId, q.keeper)
+	if info == nil {
+		return nil, types.ErrNotFound.Wrapf("vk param %d", req.ParamId)
+	}
+	return info, nil
+}
+
+// circuitParamID looks up the param_id for a zk/vk id when the keeper supports it.
+func (q *GrpcQuerier) circuitParamID(c context.Context, zkID uint64) (uint64, bool) {
+	if k, ok := q.keeper.(interface {
+		GetCircuitParamID(ctx context.Context, zkID uint64) (uint64, bool)
+	}); ok {
+		return k.GetCircuitParamID(sdk.UnwrapSDKContext(c), zkID)
+	}
+	return 0, false
+}
+
 // NewGrpcQuerier constructor
 func NewGrpcQuerier(cdc codec.Codec, storeService corestoretypes.KVStoreService, keeper types.ViewKeeper, queryGasLimit storetypes.Gas) *GrpcQuerier {
 	return &GrpcQuerier{cdc: cdc, storeService: storeService, keeper: keeper, queryGasLimit: queryGasLimit}
@@ -399,7 +495,7 @@ func queryCircuit(ctx sdk.Context, zkID uint64, keeper types.ViewKeeper) (*types
 	}
 
 	code, err := keeper.GetCircuit(ctx, zkID)
-	if err == nil {
+	if err != nil {
 		return nil, err
 	}
 	if code == nil {
@@ -407,6 +503,38 @@ func queryCircuit(ctx sdk.Context, zkID uint64, keeper types.ViewKeeper) (*types
 	}
 
 	return &types.QueryCircuitResponse{CircuitInfoResponse: info, Data: code}, nil
+}
+
+// queryVkParam is intentionally metadata-only (no raw param bytes).
+func queryVkParam(ctx sdk.Context, vkParamId uint64, keeper types.ViewKeeper) (*types.QueryVkParamResponse, error) {
+	info := queryVkParamInfo(ctx, vkParamId, keeper)
+	if info == nil || info.ParamInfo == nil {
+		return nil, nil
+	}
+	return &types.QueryVkParamResponse{
+		VkInfoResponse: info.ParamInfo,
+		Data:           nil, // never expose raw params
+	}, nil
+}
+
+func queryVkParamInfo(ctx sdk.Context, paramID uint64, keeper types.ViewKeeper) *types.QueryVkParamInfoResponse {
+	if paramID == 0 {
+		return nil
+	}
+	res := keeper.GetVkParamInfo(ctx, paramID)
+	if res == nil {
+		return nil
+	}
+	// Map VkParamInfoResponse into the nested VkInfoResponse used by generated query types.
+	return &types.QueryVkParamInfoResponse{
+		ParamInfo: &types.VkInfoResponse{
+			VkID:                  res.VkID,
+			CSId:                  res.VkID, // param_id; dedicated field lands with next proto regen
+			Creator:               res.Creator,
+			DataHash:              res.DataHash,
+			InstantiatePermission: res.InstantiatePermission,
+		},
+	}
 }
 
 func queryCircuitInfo(ctx sdk.Context, zkID uint64, keeper types.ViewKeeper) *types.CircuitInfoResponse {

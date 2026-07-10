@@ -94,12 +94,23 @@
     - [QueryRawContractStateResponse](#cosmwasm.wasm.v1.QueryRawContractStateResponse)
     - [QuerySmartContractStateRequest](#cosmwasm.wasm.v1.QuerySmartContractStateRequest)
     - [QuerySmartContractStateResponse](#cosmwasm.wasm.v1.QuerySmartContractStateResponse)
+    - [QueryVkInfoRequest](#cosmwasm.wasm.v1.QueryVkInfoRequest)
+    - [QueryVkInfoResponse](#cosmwasm.wasm.v1.QueryVkInfoResponse)
+    - [QueryVkParamInfoRequest](#cosmwasm.wasm.v1.QueryVkParamInfoRequest)
+    - [QueryVkParamInfoResponse](#cosmwasm.wasm.v1.QueryVkParamInfoResponse)
+    - [QueryVkParamRequest](#cosmwasm.wasm.v1.QueryVkParamRequest)
+    - [QueryVkParamResponse](#cosmwasm.wasm.v1.QueryVkParamResponse)
+    - [QueryVkRequest](#cosmwasm.wasm.v1.QueryVkRequest)
+    - [QueryVkResponse](#cosmwasm.wasm.v1.QueryVkResponse)
     - [QueryWasmLimitsConfigRequest](#cosmwasm.wasm.v1.QueryWasmLimitsConfigRequest)
     - [QueryWasmLimitsConfigResponse](#cosmwasm.wasm.v1.QueryWasmLimitsConfigResponse)
+    - [VkInfoResponse](#cosmwasm.wasm.v1.VkInfoResponse)
+    - [VkParamInfoResponse](#cosmwasm.wasm.v1.VkParamInfoResponse)
   
     - [Query](#cosmwasm.wasm.v1.Query)
   
 - [cosmwasm/wasm/v1/tx.proto](#cosmwasm/wasm/v1/tx.proto)
+    - [CircuitParamAuth](#cosmwasm.wasm.v1.CircuitParamAuth)
     - [MsgAddCircuitUploadParamsAddresses](#cosmwasm.wasm.v1.MsgAddCircuitUploadParamsAddresses)
     - [MsgAddCircuitUploadParamsAddressesResponse](#cosmwasm.wasm.v1.MsgAddCircuitUploadParamsAddressesResponse)
     - [MsgAddCodeUploadParamsAddresses](#cosmwasm.wasm.v1.MsgAddCodeUploadParamsAddresses)
@@ -130,8 +141,10 @@
     - [MsgStoreCircuitResponse](#cosmwasm.wasm.v1.MsgStoreCircuitResponse)
     - [MsgStoreCode](#cosmwasm.wasm.v1.MsgStoreCode)
     - [MsgStoreCodeResponse](#cosmwasm.wasm.v1.MsgStoreCodeResponse)
-    - [MsgStoreCodeWithCircuit](#cosmwasm.wasm.v1.MsgStoreCodeWithCircuit)
-    - [MsgStoreCodeWithCircuitResponse](#cosmwasm.wasm.v1.MsgStoreCodeWithCircuitResponse)
+    - [MsgStoreFullCircuit](#cosmwasm.wasm.v1.MsgStoreFullCircuit)
+    - [MsgStoreFullCircuitResponse](#cosmwasm.wasm.v1.MsgStoreFullCircuitResponse)
+    - [MsgStoreVkParam](#cosmwasm.wasm.v1.MsgStoreVkParam)
+    - [MsgStoreVkParamResponse](#cosmwasm.wasm.v1.MsgStoreVkParamResponse)
     - [MsgSudoContract](#cosmwasm.wasm.v1.MsgSudoContract)
     - [MsgSudoContractResponse](#cosmwasm.wasm.v1.MsgSudoContractResponse)
     - [MsgUnpinCircuits](#cosmwasm.wasm.v1.MsgUnpinCircuits)
@@ -211,7 +224,7 @@ AccessTypeParam
 <a name="cosmwasm.wasm.v1.CircuitInfo"></a>
 
 ### CircuitInfo
-CodeInfo is data for the uploaded contract WASM code
+CircuitInfo is data for the uploaded circuits contents
 
 
 | Field | Type | Label | Description |
@@ -221,6 +234,7 @@ CodeInfo is data for the uploaded contract WASM code
 | `instantiate_config` | [AccessConfig](#cosmwasm.wasm.v1.AccessConfig) |  | InstantiateConfig access control to apply on contract creation, optional |
 | `i` | [uint64](#uint64) |  | i: instances required during proof verification |
 | `vkp_len` | [uint64](#uint64) |  | vkp_len - number of bytes representing vk_params |
+| `cs_len` | [uint64](#uint64) |  |  |
 | `vk_len` | [uint64](#uint64) |  | vk_len - number of bytes representing vk_len |
 
 
@@ -1053,7 +1067,9 @@ CodeInfoResponse contains code meta data from CodeInfo
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| `zk_id` | [uint64](#uint64) |  | id for legacy support |
+| `zk_id` | [uint64](#uint64) |  |  |
+| `param_info` | [VkParamInfoResponse](#cosmwasm.wasm.v1.VkParamInfoResponse) |  |  |
+| `vk_info` | [VkInfoResponse](#cosmwasm.wasm.v1.VkInfoResponse) |  |  |
 | `creator` | [string](#string) |  |  |
 | `data_hash` | [bytes](#bytes) |  |  |
 | `instantiate_permission` | [AccessConfig](#cosmwasm.wasm.v1.AccessConfig) |  |  |
@@ -1203,7 +1219,7 @@ QueryCircuitRequest is the request type for the Query/Circuit RPC method
 <a name="cosmwasm.wasm.v1.QueryCircuitResponse"></a>
 
 ### QueryCircuitResponse
-QueryCircuitResponse is the response type for the Query/Code RPC method
+QueryCircuitResponse is the response type for the Query/Circuit RPC method
 
 
 | Field | Type | Label | Description |
@@ -1603,6 +1619,130 @@ Query/SmartContractState RPC method
 
 
 
+<a name="cosmwasm.wasm.v1.QueryVkInfoRequest"></a>
+
+### QueryVkInfoRequest
+QueryVkInfoRequest is the request type for the Query/VkInfo RPC method
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| `vk_id` | [uint64](#uint64) |  | grpc-gateway_out does not support Go style VkInfo |
+
+
+
+
+
+
+<a name="cosmwasm.wasm.v1.QueryVkInfoResponse"></a>
+
+### QueryVkInfoResponse
+QueryVkInfoResponse is the response type for the Query/VkInfo RPC method
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| `param_info` | [VkInfoResponse](#cosmwasm.wasm.v1.VkInfoResponse) |  |  |
+
+
+
+
+
+
+<a name="cosmwasm.wasm.v1.QueryVkParamInfoRequest"></a>
+
+### QueryVkParamInfoRequest
+QueryVkParamInfoRequest is the request type for the Query/VkParamInfo RPC
+method
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| `param_id` | [uint64](#uint64) |  | grpc-gateway_out does not support Go style ParamID |
+
+
+
+
+
+
+<a name="cosmwasm.wasm.v1.QueryVkParamInfoResponse"></a>
+
+### QueryVkParamInfoResponse
+QueryVkParamInfoResponse is the response type for the Query/VkParamInfo RPC
+method
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| `param_info` | [VkInfoResponse](#cosmwasm.wasm.v1.VkInfoResponse) |  | grpc-gateway_out does not support Go style ParamID |
+
+
+
+
+
+
+<a name="cosmwasm.wasm.v1.QueryVkParamRequest"></a>
+
+### QueryVkParamRequest
+QueryVkParamRequest is the request type for the Query/VkParam RPC method
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| `param_id` | [uint64](#uint64) |  | grpc-gateway_out does not support Go style ParamID |
+
+
+
+
+
+
+<a name="cosmwasm.wasm.v1.QueryVkParamResponse"></a>
+
+### QueryVkParamResponse
+QueryVkResponse is the response type for the Query/VkParam RPC method
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| `param_info` | [VkInfoResponse](#cosmwasm.wasm.v1.VkInfoResponse) |  |  |
+| `data` | [bytes](#bytes) |  |  |
+
+
+
+
+
+
+<a name="cosmwasm.wasm.v1.QueryVkRequest"></a>
+
+### QueryVkRequest
+QueryVkRequest is the request type for the Query/Vk RPC method
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| `vk_id` | [uint64](#uint64) |  | grpc-gateway_out does not support Go style VkID |
+
+
+
+
+
+
+<a name="cosmwasm.wasm.v1.QueryVkResponse"></a>
+
+### QueryVkResponse
+QueryVkResponse is the response type for the Query/Vk RPC method
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| `vk_info` | [VkInfoResponse](#cosmwasm.wasm.v1.VkInfoResponse) |  |  |
+| `data` | [bytes](#bytes) |  |  |
+
+
+
+
+
+
 <a name="cosmwasm.wasm.v1.QueryWasmLimitsConfigRequest"></a>
 
 ### QueryWasmLimitsConfigRequest
@@ -1630,6 +1770,43 @@ static validation of Wasm files.
 
 
 
+
+<a name="cosmwasm.wasm.v1.VkInfoResponse"></a>
+
+### VkInfoResponse
+VkInfoResponse contains code meta data from CodeInfo
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| `vk_id` | [uint64](#uint64) |  |  |
+| `cs_id` | [uint64](#uint64) |  |  |
+| `creator` | [string](#string) |  |  |
+| `data_hash` | [bytes](#bytes) |  |  |
+| `instantiate_permission` | [AccessConfig](#cosmwasm.wasm.v1.AccessConfig) |  |  |
+
+
+
+
+
+
+<a name="cosmwasm.wasm.v1.VkParamInfoResponse"></a>
+
+### VkParamInfoResponse
+ParamInfoResponse contains code meta data from VkParamInfo
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| `param_id` | [uint64](#uint64) |  |  |
+| `creator` | [string](#string) |  |  |
+| `data_hash` | [bytes](#bytes) |  |  |
+| `instantiate_permission` | [AccessConfig](#cosmwasm.wasm.v1.AccessConfig) |  |  |
+
+
+
+
+
  <!-- end messages -->
 
  <!-- end enums -->
@@ -1651,7 +1828,11 @@ Query provides defines the gRPC querier service
 | `RawContractState` | [QueryRawContractStateRequest](#cosmwasm.wasm.v1.QueryRawContractStateRequest) | [QueryRawContractStateResponse](#cosmwasm.wasm.v1.QueryRawContractStateResponse) | RawContractState gets single key from the raw store data of a contract | GET|/cosmwasm/wasm/v1/contract/{address}/raw/{query_data}|
 | `SmartContractState` | [QuerySmartContractStateRequest](#cosmwasm.wasm.v1.QuerySmartContractStateRequest) | [QuerySmartContractStateResponse](#cosmwasm.wasm.v1.QuerySmartContractStateResponse) | SmartContractState get smart query result from the contract | GET|/cosmwasm/wasm/v1/contract/{address}/smart/{query_data}|
 | `Code` | [QueryCodeRequest](#cosmwasm.wasm.v1.QueryCodeRequest) | [QueryCodeResponse](#cosmwasm.wasm.v1.QueryCodeResponse) | Code gets the binary code and metadata for a single wasm code | GET|/cosmwasm/wasm/v1/code/{code_id}|
-| `Circuit` | [QueryCircuitRequest](#cosmwasm.wasm.v1.QueryCircuitRequest) | [QueryCircuitResponse](#cosmwasm.wasm.v1.QueryCircuitResponse) | Circuit gets the binary vk and metadata footer binary for a single circuit | GET|/cosmwasm/wasm/v1/circuit/{zk_id}|
+| `Circuit` | [QueryCircuitRequest](#cosmwasm.wasm.v1.QueryCircuitRequest) | [QueryCircuitResponse](#cosmwasm.wasm.v1.QueryCircuitResponse) | Circuit gets the params,cs, & vk for a single circuit | GET|/cosmwasm/wasm/v1/circuit/{zk_id}|
+| `Vk` | [QueryVkRequest](#cosmwasm.wasm.v1.QueryVkRequest) | [QueryVkResponse](#cosmwasm.wasm.v1.QueryVkResponse) | Vk gets the cs,& vk for a single circuit | GET|/cosmwasm/wasm/v1/vk/{vk_id}|
+| `VkInfo` | [QueryVkInfoRequest](#cosmwasm.wasm.v1.QueryVkInfoRequest) | [QueryVkInfoResponse](#cosmwasm.wasm.v1.QueryVkInfoResponse) | VkInfo gets the info about the Vk | GET|/cosmwasm/wasm/v1/vk_info/{vk_id}|
+| `VkParam` | [QueryVkParamRequest](#cosmwasm.wasm.v1.QueryVkParamRequest) | [QueryVkParamResponse](#cosmwasm.wasm.v1.QueryVkParamResponse) | VkParam gets the parameters for a single circuit's constraint system | GET|/cosmwasm/wasm/v1/vk_param/{param_id}|
+| `VkParamInfo` | [QueryVkParamInfoRequest](#cosmwasm.wasm.v1.QueryVkParamInfoRequest) | [QueryVkParamInfoResponse](#cosmwasm.wasm.v1.QueryVkParamInfoResponse) | Vk gets the cs,& vk for a single circuit | GET|/cosmwasm/wasm/v1/vk_param_info/{param_id}|
 | `Codes` | [QueryCodesRequest](#cosmwasm.wasm.v1.QueryCodesRequest) | [QueryCodesResponse](#cosmwasm.wasm.v1.QueryCodesResponse) | Codes gets the metadata for all stored wasm codes | GET|/cosmwasm/wasm/v1/code|
 | `CodeInfo` | [QueryCodeInfoRequest](#cosmwasm.wasm.v1.QueryCodeInfoRequest) | [QueryCodeInfoResponse](#cosmwasm.wasm.v1.QueryCodeInfoResponse) | CodeInfo gets the metadata for a single wasm code | GET|/cosmwasm/wasm/v1/code-info/{code_id}|
 | `CircuitInfo` | [QueryCircuitInfoRequest](#cosmwasm.wasm.v1.QueryCircuitInfoRequest) | [QueryCircuitInfoResponse](#cosmwasm.wasm.v1.QueryCircuitInfoResponse) | CircuitInfo gets the circuit meta data | GET|/cosmwasm/wasm/v1/circuit-info/{zk_id}|
@@ -1670,6 +1851,23 @@ Query provides defines the gRPC querier service
 <p align="right"><a href="#top">Top</a></p>
 
 ## cosmwasm/wasm/v1/tx.proto
+
+
+
+<a name="cosmwasm.wasm.v1.CircuitParamAuth"></a>
+
+### CircuitParamAuth
+CircuitParamAuth returns store result data.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| `circuit_type` | [uint64](#uint64) |  | CircuitType is the reference to the type of proving system compatible |
+| `curve_type` | [uint64](#uint64) |  | CurveType is the reference to the type of proving system compatible |
+| `k` | [uint64](#uint64) |  | K is the params constraint system K value |
+
+
+
 
 
 
@@ -2104,12 +2302,14 @@ Since: 0.42
 
 ### MsgStoreCircuit
 MsgStoreCircuit submit Circuit code to the system
+requires params to already have been uploaded.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
 | `sender` | [string](#string) |  | Sender is the actor that signed the messages |
-| `circuit_binary` | [bytes](#bytes) |  | CircuitBinaryFile can be raw or gzip compressed |
+| `param_key` | [uint64](#uint64) |  | CircuitParamKey appstate key generated from CircuitParamAuth to use for this Circuit. errors if does not exist or incompatible with this circuit type. |
+| `vk_body` | [bytes](#bytes) |  | CircuitBinaryFile can be raw or gzip compressed |
 | `instantiate_permission` | [AccessConfig](#cosmwasm.wasm.v1.AccessConfig) |  | InstantiatePermission access control to apply on contract creation, (anyone, these-people, only me) optional |
 
 
@@ -2166,34 +2366,70 @@ MsgStoreCodeResponse returns store result data.
 
 
 
-<a name="cosmwasm.wasm.v1.MsgStoreCodeWithCircuit"></a>
+<a name="cosmwasm.wasm.v1.MsgStoreFullCircuit"></a>
 
-### MsgStoreCodeWithCircuit
-MsgStoreCodeWithCircuit submit Wasm code to the system with bytes of a
-circuit
+### MsgStoreFullCircuit
+MsgStoreFullCircuit
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| `sender` | [string](#string) |  |  |
+| `auth` | [CircuitParamAuth](#cosmwasm.wasm.v1.CircuitParamAuth) |  |  |
+| `params_body` | [bytes](#bytes) |  |  |
+| `vk_body` | [bytes](#bytes) |  |  |
+
+
+
+
+
+
+<a name="cosmwasm.wasm.v1.MsgStoreFullCircuitResponse"></a>
+
+### MsgStoreFullCircuitResponse
+MsgStoreCircuitResponse returns store result data.
+
+
+| Field | Type | Label | Description |
+| ----- | ---- | ----- | ----------- |
+| `cs_param_id` | [uint64](#uint64) |  |  |
+| `zk_id` | [uint64](#uint64) |  |  |
+| `cs_checksum` | [bytes](#bytes) |  |  |
+| `vk_checksum` | [bytes](#bytes) |  |  |
+
+
+
+
+
+
+<a name="cosmwasm.wasm.v1.MsgStoreVkParam"></a>
+
+### MsgStoreVkParam
+MsgStoreCircuitParam submit Circuit Constraint System Param code to the
+system.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
 | `sender` | [string](#string) |  | Sender is the actor that signed the messages |
-| `wasm_byte_code` | [bytes](#bytes) |  | [0-cosmwasm,1-halo2-vk] |
-| `vk_byte_code` | [bytes](#bytes) |  |  |
-| `instantiate_permission` | [AccessConfig](#cosmwasm.wasm.v1.AccessConfig) |  | InstantiatePermission access control to apply on contract creation, optional |
+| `auth` | [CircuitParamAuth](#cosmwasm.wasm.v1.CircuitParamAuth) |  | CircuitParamAuth is the structure used to hold the circuit proving and curve type identifiers. |
+| `params` | [bytes](#bytes) |  | params: can be raw or gzip compressed |
 
 
 
 
 
 
-<a name="cosmwasm.wasm.v1.MsgStoreCodeWithCircuitResponse"></a>
+<a name="cosmwasm.wasm.v1.MsgStoreVkParamResponse"></a>
 
-### MsgStoreCodeWithCircuitResponse
-MsgStoreCodeResponse returns store result data.
+### MsgStoreVkParamResponse
+MsgStoreCircuitResponse returns store result data.
 
 
 | Field | Type | Label | Description |
 | ----- | ---- | ----- | ----------- |
-| `res` | [MsgStoreCodeResponse](#cosmwasm.wasm.v1.MsgStoreCodeResponse) | repeated | [0] - cosmwasm , [1] - vk |
+| `cs_param_id` | [uint64](#uint64) |  | CodeID is the reference to the stored WASM code |
+| `checksum` | [bytes](#bytes) |  | Checksum key of the cs_param_id |
 
 
 
@@ -2427,8 +2663,9 @@ Msg defines the wasm Msg service.
 | Method Name | Request Type | Response Type | Description | HTTP Verb | Endpoint |
 | ----------- | ------------ | ------------- | ------------| ------- | -------- |
 | `StoreCode` | [MsgStoreCode](#cosmwasm.wasm.v1.MsgStoreCode) | [MsgStoreCodeResponse](#cosmwasm.wasm.v1.MsgStoreCodeResponse) | StoreCode to submit Wasm code to the system | |
-| `StoreCircuit` | [MsgStoreCircuit](#cosmwasm.wasm.v1.MsgStoreCircuit) | [MsgStoreCircuitResponse](#cosmwasm.wasm.v1.MsgStoreCircuitResponse) | StoreCode to submit Wasm code to the system | |
-| `StoreCodeWithCircuit` | [MsgStoreCodeWithCircuit](#cosmwasm.wasm.v1.MsgStoreCodeWithCircuit) | [MsgStoreCodeWithCircuitResponse](#cosmwasm.wasm.v1.MsgStoreCodeWithCircuitResponse) | StoreCode to submit Wasm code to the system, along with an Halo2 Verifying Key | |
+| `StoreVkParam` | [MsgStoreVkParam](#cosmwasm.wasm.v1.MsgStoreVkParam) | [MsgStoreVkParamResponse](#cosmwasm.wasm.v1.MsgStoreVkParamResponse) | Store reusable constraint system parameters (k, curve & prover type invariant) | |
+| `StoreCircuit` | [MsgStoreCircuit](#cosmwasm.wasm.v1.MsgStoreCircuit) | [MsgStoreCircuitResponse](#cosmwasm.wasm.v1.MsgStoreCircuitResponse) | Store a Verifying Key that references previously uploaded params | |
+| `StoreFullCircuit` | [MsgStoreFullCircuit](#cosmwasm.wasm.v1.MsgStoreFullCircuit) | [MsgStoreFullCircuitResponse](#cosmwasm.wasm.v1.MsgStoreFullCircuitResponse) | Convenience: upload everything in one go | |
 | `InstantiateContract` | [MsgInstantiateContract](#cosmwasm.wasm.v1.MsgInstantiateContract) | [MsgInstantiateContractResponse](#cosmwasm.wasm.v1.MsgInstantiateContractResponse) | InstantiateContract creates a new smart contract instance for the given code id. | |
 | `InstantiateContract2` | [MsgInstantiateContract2](#cosmwasm.wasm.v1.MsgInstantiateContract2) | [MsgInstantiateContract2Response](#cosmwasm.wasm.v1.MsgInstantiateContract2Response) | InstantiateContract2 creates a new smart contract instance for the given code id with a predictable address | |
 | `ExecuteContract` | [MsgExecuteContract](#cosmwasm.wasm.v1.MsgExecuteContract) | [MsgExecuteContractResponse](#cosmwasm.wasm.v1.MsgExecuteContractResponse) | Execute submits the given message data to a smart contract | |

@@ -755,9 +755,9 @@ func WasmQuerier(k wasmQueryKeeper) func(ctx sdk.Context, request *wasmvmtypes.W
 				return nil, types.ErrNoSuchCodeFn(request.CircuitInfo.ZkID).Wrapf("circuit zk_id %d", request.CircuitInfo.ZkID)
 			}
 			res := wasmvmtypes.CircuitInfoResponse{
-				ZkID:     request.CircuitInfo.ZkID,
-				Creator:  info.Creator,
-				Checksum: info.CircuitHash,
+				ZkID:       request.CircuitInfo.ZkID,
+				Creator:    info.Creator,
+				CircuitKey: info.CircuitHash, // 72-byte wasmvm circuit key for Path A cache load
 			}
 			return json.Marshal(res)
 		}

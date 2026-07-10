@@ -18,13 +18,8 @@ type msgServer struct {
 	keeper *Keeper
 }
 
-// NewMsgServerImpl default constructor
-func NewMsgServerImpl(k *Keeper) types.MsgServer {
-	return &msgServer{keeper: k}
-}
-
-// StoreCodeWithCircuit stores both WASM and VK code on chain
-func (m msgServer) StoreCodeWithCircuit(ctx context.Context, msg *types.MsgStoreCodeWithCircuit) (*types.MsgStoreCodeWithCircuitResponse, error) {
+// StoreVkParam stores reusable commitment params. Raw bytes are not queryable.
+func (m msgServer) StoreVkParam(ctx context.Context, msg *types.MsgStoreVkParam) (*types.MsgStoreVkParamResponse, error) {
 	if err := msg.ValidateBasic(); err != nil {
 		return nil, err
 	}
@@ -32,25 +27,81 @@ func (m msgServer) StoreCodeWithCircuit(ctx context.Context, msg *types.MsgStore
 	if err != nil {
 		return nil, errorsmod.Wrap(err, "sender")
 	}
-
 	policy := m.selectAuthorizationPolicy(ctx, msg.Sender)
 
-	codeID, zkID, checksums, err := m.keeper.create_with_circuit(ctx, senderAddr, msg.WASMByteCode, msg.CircuitBinaryFile, msg.InstantiatePermission, policy)
+	paramID, checksum, err := m.keeper.store_vk_param(ctx, senderAddr, msg.CircuitParamAuth, msg.CsParam, policy)
 	if err != nil {
 		return nil, err
 	}
-
-	return &types.MsgStoreCodeWithCircuitResponse{
-		Code: &types.MsgStoreCodeResponse{
-			CodeID:   codeID,
-			Checksum: checksums[0],
-		},
-		Circuit: &types.MsgStoreCircuitResponse{
-			ZkID:     zkID,
-			Checksum: checksums[1],
-		},
+	return &types.MsgStoreVkParamResponse{
+		CsParamID: paramID,
+		Checksum:  checksum,
 	}, nil
 }
+
+// StoreFullCircuit stores params then the cs+vk body that references them.
+func (m msgServer) StoreFullCircuit(ctx context.Context, msg *types.MsgStoreFullCircuit) (*types.MsgStoreFullCircuitResponse, error) {
+	if err := msg.ValidateBasic(); err != nil {
+		return nil, err
+	}
+	senderAddr, err := sdk.AccAddressFromBech32(msg.Sender)
+	if err != nil {
+		return nil, errorsmod.Wrap(err, "sender")
+	}
+	policy := m.selectAuthorizationPolicy(ctx, msg.Sender)
+
+	paramID, zkID, paramChecksum, circuitChecksum, err := m.keeper.store_full_circuit(
+		ctx,
+		senderAddr,
+		msg.Auth,
+		msg.CircuitParamBinaryFile,
+		msg.CircuitVkBinaryFile,
+		policy,
+	)
+	if err != nil {
+		return nil, err
+	}
+	return &types.MsgStoreFullCircuitResponse{
+		CsParamId:   paramID,
+		ZkId:        zkID,
+		CsChecksum:  paramChecksum,
+		VkChecksum:  circuitChecksum,
+	}, nil
+}
+
+// NewMsgServerImpl default constructor
+func NewMsgServerImpl(k *Keeper) types.MsgServer {
+	return &msgServer{keeper: k}
+}
+
+// // StoreCodeWithCircuit stores both WASM and VK code on chain
+// func (m msgServer) StoreCodeWithCircuit(ctx context.Context, msg *types.MsgStoreCodeWithCircuit) (*types.MsgStoreCodeWithCircuitResponse, error) {
+// 	if err := msg.ValidateBasic(); err != nil {
+// 		return nil, err
+// 	}
+// 	senderAddr, err := sdk.AccAddressFromBech32(msg.Sender)
+// 	if err != nil {
+// 		return nil, errorsmod.Wrap(err, "sender")
+// 	}
+
+// 	policy := m.selectAuthorizationPolicy(ctx, msg.Sender)
+
+// 	codeID, zkID, checksums, err := m.keeper.create_with_circuit(ctx, senderAddr, msg.WASMByteCode, msg.CircuitBinaryFile, msg.InstantiatePermission, policy)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	return &types.MsgStoreCodeWithCircuitResponse{
+// 		Code: &types.MsgStoreCodeResponse{
+// 			CodeID:   codeID,
+// 			Checksum: checksums[0],
+// 		},
+// 		Circuit: &types.MsgStoreCircuitResponse{
+// 			ZkID:     zkID,
+// 			Checksum: checksums[1],
+// 		},
+// 	}, nil
+// }
 
 // StoreCode stores a new wasm code on chain
 func (m msgServer) StoreCode(ctx context.Context, msg *types.MsgStoreCode) (*types.MsgStoreCodeResponse, error) {
@@ -75,10 +126,9 @@ func (m msgServer) StoreCode(ctx context.Context, msg *types.MsgStoreCode) (*typ
 	}, nil
 }
 
-// StoreCircuit stores a new circuit (VK) code on chain
+// StoreCircuit stores a verifying key that references a previously stored param set.
+// CircuitBinaryFile is the vk_body ([cs][vk][footer]); params are loaded by param_key.
 func (m msgServer) StoreCircuit(ctx context.Context, msg *types.MsgStoreCircuit) (*types.MsgStoreCircuitResponse, error) {
-	// log := m.keeper.Logger(sdk.UnwrapSDKContext(ctx))
-
 	if err := msg.ValidateBasic(); err != nil {
 		return nil, err
 	}
@@ -89,15 +139,17 @@ func (m msgServer) StoreCircuit(ctx context.Context, msg *types.MsgStoreCircuit)
 
 	policy := m.selectAuthorizationPolicy(ctx, msg.Sender)
 
-	zkID, checksum, err := m.keeper.store_circuit(ctx, senderAddr, msg.CircuitBinaryFile, msg.InstantiatePermission, policy)
+	zkID, checksum, err := m.keeper.store_circuit(
+		ctx,
+		senderAddr,
+		msg.CircuitParamKey,
+		msg.CircuitBinaryFile,
+		msg.InstantiatePermission,
+		policy,
+	)
 	if err != nil {
 		return nil, err
 	}
-
-	// log.Debug("pinning circuit")
-	// if err := m.keeper.pinCircuit(ctx, zkID); err != nil {
-	// 	return nil, err
-	// }
 
 	return &types.MsgStoreCircuitResponse{
 		ZkID:     zkID,

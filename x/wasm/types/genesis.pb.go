@@ -32,6 +32,8 @@ type GenesisState struct {
 	Contracts []Contract `protobuf:"bytes,3,rep,name=contracts,proto3" json:"contracts,omitempty"`
 	Sequences []Sequence `protobuf:"bytes,4,rep,name=sequences,proto3" json:"sequences,omitempty"`
 	Circuits  []Circuit  `protobuf:"bytes,5,rep,name=circuits,proto3" json:"circuits,omitempty"`
+	// Standalone commitment params (StoreVkParam) for state sync / StoreParam warm.
+	VkParams []VkParam `protobuf:"bytes,6,rep,name=vk_params,json=vkParams,proto3" json:"vk_params,omitempty"`
 }
 
 func (m *GenesisState) Reset()         { *m = GenesisState{} }
@@ -98,6 +100,13 @@ func (m *GenesisState) GetSequences() []Sequence {
 func (m *GenesisState) GetCircuits() []Circuit {
 	if m != nil {
 		return m.Circuits
+	}
+	return nil
+}
+
+func (m *GenesisState) GetVkParams() []VkParam {
+	if m != nil {
+		return m.VkParams
 	}
 	return nil
 }
@@ -441,6 +450,20 @@ func (m *GenesisState) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
+	if len(m.VkParams) > 0 {
+		for iNdEx := len(m.VkParams) - 1; iNdEx >= 0; iNdEx-- {
+			{
+				size, err := m.VkParams[iNdEx].MarshalToSizedBuffer(dAtA[:i])
+				if err != nil {
+					return 0, err
+				}
+				i -= size
+				i = encodeVarintGenesis(dAtA, i, uint64(size))
+			}
+			i--
+			dAtA[i] = 0x32
+		}
+	}
 	if len(m.Circuits) > 0 {
 		for iNdEx := len(m.Circuits) - 1; iNdEx >= 0; iNdEx-- {
 			{
@@ -766,6 +789,12 @@ func (m *GenesisState) Size() (n int) {
 			n += 1 + l + sovGenesis(uint64(l))
 		}
 	}
+	if len(m.VkParams) > 0 {
+		for _, e := range m.VkParams {
+			l = e.Size()
+			n += 1 + l + sovGenesis(uint64(l))
+		}
+	}
 	return n
 }
 
@@ -1055,6 +1084,40 @@ func (m *GenesisState) Unmarshal(dAtA []byte) error {
 			}
 			m.Circuits = append(m.Circuits, Circuit{})
 			if err := m.Circuits[len(m.Circuits)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
+				return err
+			}
+			iNdEx = postIndex
+		case 6:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field VkParams", wireType)
+			}
+			var msglen int
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowGenesis
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				msglen |= int(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			if msglen < 0 {
+				return ErrInvalidLengthGenesis
+			}
+			postIndex := iNdEx + msglen
+			if postIndex < 0 {
+				return ErrInvalidLengthGenesis
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.VkParams = append(m.VkParams, VkParam{})
+			if err := m.VkParams[len(m.VkParams)-1].Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
 			iNdEx = postIndex

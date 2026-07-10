@@ -14,15 +14,16 @@ option (gogoproto.goproto_getters_all) = false;
 // Msg defines the wasm Msg service.
 service Msg {
   option (cosmos.msg.v1.service) = true;
-
   // StoreCode to submit Wasm code to the system
   rpc StoreCode(MsgStoreCode) returns (MsgStoreCodeResponse);
-  // StoreCode to submit Wasm code to the system
+  // Store reusable constraint system parameters (k, curve & prover type
+  // invariant)
+  rpc StoreVkParam(MsgStoreVkParam) returns (MsgStoreVkParamResponse);
+  // Store a Verifying Key that references previously uploaded params
   rpc StoreCircuit(MsgStoreCircuit) returns (MsgStoreCircuitResponse);
-  // StoreCode to submit Wasm code to the system, along with an Halo2 Verifying
-  // Key
-  rpc StoreCodeWithCircuit(MsgStoreCodeWithCircuit)
-      returns (MsgStoreCodeWithCircuitResponse);
+  // Convenience: upload everything in one go
+  rpc StoreFullCircuit(MsgStoreFullCircuit)
+      returns (MsgStoreFullCircuitResponse);
   //  InstantiateContract creates a new smart contract instance for the given
   //  code id.
   rpc InstantiateContract(MsgInstantiateContract)
@@ -103,29 +104,6 @@ service Msg {
       returns (MsgUpdateContractLabelResponse);
 }
 
-// MsgStoreCodeWithCircuit submit Wasm code to the system with bytes of a
-// circuit
-message MsgStoreCodeWithCircuit {
-  option (amino.name) = "wasm/MsgStoreCodeWithCircuit";
-  option (cosmos.msg.v1.signer) = "sender";
-
-  // Sender is the actor that signed the messages
-  string sender = 1 [ (cosmos_proto.scalar) = "cosmos.AddressString" ];
-  // [0-cosmwasm,1-halo2-vk]
-  bytes wasm_byte_code = 2 [ (gogoproto.customname) = "WASMByteCode" ];
-  bytes vk_byte_code = 6 [ (gogoproto.customname) = "CircuitBinaryFile" ];
-  // Used in v1beta1
-  reserved 3, 4;
-  // InstantiatePermission access control to apply on contract creation,
-  // optional
-  AccessConfig instantiate_permission = 5;
-}
-// MsgStoreCodeResponse returns store result data.
-message MsgStoreCodeWithCircuitResponse {
-  MsgStoreCodeResponse code = 1;
-  MsgStoreCircuitResponse circuit = 2;
-}
-
 // MsgStoreCode submit Wasm code to the system
 message MsgStoreCode {
   option (amino.name) = "wasm/MsgStoreCode";
@@ -149,18 +127,55 @@ message MsgStoreCodeResponse {
   bytes checksum = 2;
 }
 
+// MsgStoreCircuitParam submit Circuit Constraint System Param code to the
+// system.
+message MsgStoreVkParam {
+  option (amino.name) = "wasm/MsgStoreCircuitParam";
+  option (cosmos.msg.v1.signer) = "sender";
+  // Sender is the actor that signed the messages
+  string sender = 1 [ (cosmos_proto.scalar) = "cosmos.AddressString" ];
+  // CircuitParamAuth is the structure used to hold the circuit proving and
+  // curve type identifiers.
+  CircuitParamAuth auth = 2 [ (gogoproto.customname) = "CircuitParamAuth" ];
+  ;
+  // params: can be raw or gzip compressed
+  bytes params = 3 [ (gogoproto.customname) = "CsParam" ];
+}
+
+// MsgStoreCircuitResponse returns store result data.
+message MsgStoreVkParamResponse {
+  // CodeID is the reference to the stored WASM code
+  uint64 cs_param_id = 1 [ (gogoproto.customname) = "CsParamID" ];
+  // Checksum key of the cs_param_id
+  bytes checksum = 2;
+}
+
+// CircuitParamAuth returns store result data.
+message CircuitParamAuth {
+  // CircuitType is the reference to the type of proving system compatible
+  uint64 circuit_type = 1 [ (gogoproto.customname) = "CircuitType" ];
+  // CurveType is the reference to the type of proving system compatible
+  uint64 curve_type = 2 [ (gogoproto.customname) = "CurveType" ];
+  // K is the params constraint system K value
+  uint64 k = 3 [ (gogoproto.customname) = "K" ];
+}
+
 // MsgStoreCircuit submit Circuit code to the system
+// requires params to already have been uploaded.
 message MsgStoreCircuit {
   option (amino.name) = "wasm/MsgStoreCircuit";
   option (cosmos.msg.v1.signer) = "sender";
-
   // Sender is the actor that signed the messages
   string sender = 1 [ (cosmos_proto.scalar) = "cosmos.AddressString" ];
+  // CircuitParamKey appstate key generated from CircuitParamAuth to use for
+  // this Circuit. errors if does not exist or incompatible with this circuit
+  // type.
+  uint64 param_key = 2 [ (gogoproto.customname) = "CircuitParamKey" ];
   // CircuitBinaryFile can be raw or gzip compressed
-  bytes circuit_binary = 2 [ (gogoproto.customname) = "CircuitBinaryFile" ];
+  bytes vk_body = 3 [ (gogoproto.customname) = "CircuitBinaryFile" ];
   // InstantiatePermission access control to apply on contract creation,
   // (anyone, these-people, only me) optional
-  AccessConfig instantiate_permission = 3;
+  AccessConfig instantiate_permission = 4;
 }
 
 // MsgStoreCircuitResponse returns store result data.
@@ -169,6 +184,24 @@ message MsgStoreCircuitResponse {
   uint64 zk_id = 1 [ (gogoproto.customname) = "ZkID" ];
   // Checksum is the sha256 hash of the stored code
   bytes checksum = 2;
+}
+
+// MsgStoreFullCircuit
+message MsgStoreFullCircuit {
+  option (amino.name) = "wasm/MsgStoreFullCircuit";
+  option (cosmos.msg.v1.signer) = "sender";
+  string sender = 1 [ (cosmos_proto.scalar) = "cosmos.AddressString" ];
+  CircuitParamAuth auth = 2;
+  bytes params_body = 3 [ (gogoproto.customname) = "CircuitParamBinaryFile" ];
+  bytes vk_body = 4 [ (gogoproto.customname) = "CircuitVkBinaryFile" ];
+}
+
+// MsgStoreCircuitResponse returns store result data.
+message MsgStoreFullCircuitResponse {
+  uint64 cs_param_id = 1;
+  uint64 zk_id = 2;
+  bytes cs_checksum = 3;
+  bytes vk_checksum = 4;
 }
 
 // MsgInstantiateContract create a new smart contract instance for the given
