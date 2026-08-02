@@ -1,7 +1,6 @@
 package types
 
 import (
-	storetypes "cosmossdk.io/store/types"
 	wasmvm "github.com/CosmWasm/wasmvm/v3"
 	wasmvmtypes "github.com/CosmWasm/wasmvm/v3/types"
 
