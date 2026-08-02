@@ -5,7 +5,8 @@ import (
 	"fmt"
 
 	wasmvmtypes "github.com/CosmWasm/wasmvm/v3/types"
-	channeltypesv2 "github.com/cosmos/ibc-go/v10/modules/core/04-channel/v2/types"
+	channeltypesv2 "github.com/cosmos/ibc-go/v11/modules/core/04-channel/v2/types"
+	porttypes "github.com/cosmos/ibc-go/v11/modules/core/05-port/types"
 
 	errorsmod "cosmossdk.io/errors"
 
@@ -40,7 +41,7 @@ type SDKMessageHandler struct {
 func NewDefaultMessageHandler(
 	keeper *Keeper,
 	router MessageRouter,
-	ics4Wrapper types.ICS4Wrapper,
+	ics4Wrapper porttypes.ICS4Wrapper,
 	channelKeeperV2 types.ChannelKeeperV2,
 	bankKeeper types.Burner,
 	cdc codec.Codec,
@@ -87,7 +88,7 @@ func (h SDKMessageHandler) DispatchMsg(ctx sdk.Context, contractAddr sdk.AccAddr
 		}
 		events = append(events, sdkEvents...)
 	}
-	return
+	return events, data, msgResponses, err
 }
 
 func (h SDKMessageHandler) handleSdkMessage(ctx sdk.Context, contractAddr sdk.Address, msg sdk.Msg) (*sdk.Result, error) {
@@ -160,12 +161,12 @@ func (m MessageHandlerChain) DispatchMsg(ctx sdk.Context, contractAddr sdk.AccAd
 
 // IBCRawPacketHandler handles IBC.SendPacket messages which are published to an IBC channel.
 type IBCRawPacketHandler struct {
-	ics4Wrapper types.ICS4Wrapper
+	ics4Wrapper porttypes.ICS4Wrapper
 	wasmKeeper  types.IBCContractKeeper
 }
 
 // NewIBCRawPacketHandler constructor
-func NewIBCRawPacketHandler(ics4Wrapper types.ICS4Wrapper, wasmKeeper types.IBCContractKeeper) IBCRawPacketHandler {
+func NewIBCRawPacketHandler(ics4Wrapper porttypes.ICS4Wrapper, wasmKeeper types.IBCContractKeeper) IBCRawPacketHandler {
 	return IBCRawPacketHandler{
 		ics4Wrapper: ics4Wrapper,
 		wasmKeeper:  wasmKeeper,
@@ -261,7 +262,7 @@ func NewIBC2RawPacketHandler(channelKeeperV2 types.ChannelKeeperV2) IBC2RawPacke
 
 // DispatchMsg publishes a raw IBC2 packet onto the channel.
 func (h IBC2RawPacketHandler) DispatchMsg(ctx sdk.Context,
-	contractAddr sdk.AccAddress, contractIBC2PortID string, msg wasmvmtypes.CosmosMsg,
+	contractAddr sdk.AccAddress, _ string, msg wasmvmtypes.CosmosMsg,
 ) ([]sdk.Event, [][]byte, [][]*codectypes.Any, error) {
 	if msg.IBC2 == nil {
 		return nil, nil, nil, types.ErrUnknownMsg
@@ -269,17 +270,30 @@ func (h IBC2RawPacketHandler) DispatchMsg(ctx sdk.Context,
 	switch {
 	case msg.IBC2.WriteAcknowledgement != nil:
 		packet := msg.IBC2.WriteAcknowledgement
-		if contractIBC2PortID == "" {
-			return nil, nil, nil, errorsmod.Wrapf(types.ErrUnsupportedForContract, "ibc2 not supported")
+		destinationClient := msg.IBC2.WriteAcknowledgement.DestinationClient
+		if destinationClient == "" {
+			return nil, nil, nil, errorsmod.Wrapf(types.ErrEmpty, "ibc2 destination client")
 		}
-		sourceClient := msg.IBC2.WriteAcknowledgement.SourceClient
-		if sourceClient == "" {
-			return nil, nil, nil, errorsmod.Wrapf(types.ErrEmpty, "ibc2 channel")
+
+		contractIBC2PortID := PortIDForContractV2(contractAddr)
+		storedPacket, ok := h.channelKeeperV2.GetAsyncPacket(ctx, destinationClient, packet.PacketSequence)
+		if !ok {
+			return nil, nil, nil, errorsmod.Wrapf(types.ErrInvalid, "no pending async packet for client %s sequence %d", destinationClient, packet.PacketSequence)
+		}
+
+		if len(storedPacket.Payloads) != 1 {
+			return nil, nil, nil, errorsmod.Wrapf(types.ErrInvalid, "expected 1 payload, got %d", len(storedPacket.Payloads))
+		}
+
+		if storedPacket.Payloads[0].DestinationPort != contractIBC2PortID {
+			return nil, nil, nil, errorsmod.Wrapf(sdkerrors.ErrUnauthorized,
+				"contract port %s is not authorized to acknowledge packet addressed to port %s",
+				contractIBC2PortID, storedPacket.Payloads[0].DestinationPort)
 		}
 
 		err := h.channelKeeperV2.WriteAcknowledgement(
 			ctx,
-			packet.SourceClient,
+			destinationClient,
 			packet.PacketSequence,
 			channeltypesv2.Acknowledgement{AppAcknowledgements: [][]byte{msg.IBC2.WriteAcknowledgement.Ack.Data}},
 		)

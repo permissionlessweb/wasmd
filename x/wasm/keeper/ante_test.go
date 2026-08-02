@@ -9,10 +9,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"cosmossdk.io/log"
-	"cosmossdk.io/store"
-	storemetrics "cosmossdk.io/store/metrics"
-	storetypes "cosmossdk.io/store/types"
+	"cosmossdk.io/log/v2"
+	"github.com/cosmos/cosmos-sdk/store/v2"
+	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 
 	"github.com/cosmos/cosmos-sdk/runtime"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -25,7 +24,7 @@ import (
 func TestCountTxDecorator(t *testing.T) {
 	keyWasm := storetypes.NewKVStoreKey(types.StoreKey)
 	db := dbm.NewMemDB()
-	ms := store.NewCommitMultiStore(db, log.NewTestLogger(t), storemetrics.NewNoOpMetrics())
+	ms := store.NewCommitMultiStore(db, log.NewTestLogger(t))
 	ms.MountStoreWithDB(keyWasm, storetypes.StoreTypeIAVL, db)
 	require.NoError(t, ms.LoadLatestVersion())
 	const myCurrentBlockHeight = 100
@@ -190,7 +189,7 @@ func consumeGasAnteHandler(gasToConsume storetypes.Gas) sdk.AnteHandler {
 
 func TestGasRegisterDecorator(t *testing.T) {
 	db := dbm.NewMemDB()
-	ms := store.NewCommitMultiStore(db, log.NewTestLogger(t), storemetrics.NewNoOpMetrics())
+	ms := store.NewCommitMultiStore(db, log.NewTestLogger(t))
 
 	specs := map[string]struct {
 		simulate       bool
@@ -235,15 +234,13 @@ func TestGasRegisterDecorator(t *testing.T) {
 
 func TestTxContractsDecorator(t *testing.T) {
 	db := dbm.NewMemDB()
-	ms := store.NewCommitMultiStore(db, log.NewTestLogger(t), storemetrics.NewNoOpMetrics())
+	ms := store.NewCommitMultiStore(db, log.NewTestLogger(t))
 
 	specs := map[string]struct {
-		empty          bool
 		simulate       bool
 		nextAssertAnte func(ctx sdk.Context, tx sdk.Tx, simulate bool) (sdk.Context, error)
 	}{
 		"simulation - empty tx contracts": {
-			empty:    true,
 			simulate: true,
 			nextAssertAnte: func(ctx sdk.Context, tx sdk.Tx, simulate bool) (sdk.Context, error) {
 				txContracts, ok := types.TxContractsFromContext(ctx)
@@ -254,7 +251,6 @@ func TestTxContractsDecorator(t *testing.T) {
 			},
 		},
 		"not simulation - empty tx contracts": {
-			empty:    true,
 			simulate: false,
 			nextAssertAnte: func(ctx sdk.Context, tx sdk.Tx, simulate bool) (sdk.Context, error) {
 				txContracts, ok := types.TxContractsFromContext(ctx)
@@ -265,7 +261,6 @@ func TestTxContractsDecorator(t *testing.T) {
 			},
 		},
 		"simulation - not empty tx contracts": {
-			empty:    false,
 			simulate: true,
 			nextAssertAnte: func(ctx sdk.Context, tx sdk.Tx, simulate bool) (sdk.Context, error) {
 				txContracts, ok := types.TxContractsFromContext(ctx)
@@ -276,7 +271,6 @@ func TestTxContractsDecorator(t *testing.T) {
 			},
 		},
 		"not simulation - not empty tx contracts": {
-			empty:    false,
 			simulate: false,
 			nextAssertAnte: func(ctx sdk.Context, tx sdk.Tx, simulate bool) (sdk.Context, error) {
 				txContracts, ok := types.TxContractsFromContext(ctx)
@@ -293,12 +287,6 @@ func TestTxContractsDecorator(t *testing.T) {
 				Height: 100,
 				Time:   time.Now(),
 			}, false, log.NewNopLogger())
-
-			if !spec.empty {
-				contracts := types.NewTxContracts()
-				contracts.AddContract([]byte("13a1fc994cc6d1c81b746ee0c0ff6f90043875e0bf1d9be6b7d779fc978dc2a5"))
-				ctx = types.WithTxContracts(ctx, contracts)
-			}
 
 			var anyTx sdk.Tx
 

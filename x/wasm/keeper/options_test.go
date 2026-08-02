@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	storetypes "cosmossdk.io/store/types"
+	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 
 	"github.com/cosmos/cosmos-sdk/runtime"
 	authkeeper "github.com/cosmos/cosmos-sdk/x/auth/keeper"
@@ -130,8 +130,8 @@ func TestConstructorOptions(t *testing.T) {
 			srcOpt: WithAcceptedAccountTypesOnContractInstantiation(&authtypes.BaseAccount{}, &vestingtypes.ContinuousVestingAccount{}),
 			verify: func(t *testing.T, k Keeper) {
 				exp := map[reflect.Type]struct{}{
-					reflect.TypeOf(&authtypes.BaseAccount{}):                 {},
-					reflect.TypeOf(&vestingtypes.ContinuousVestingAccount{}): {},
+					reflect.TypeFor[*authtypes.BaseAccount]():                 {},
+					reflect.TypeFor[*vestingtypes.ContinuousVestingAccount](): {},
 				}
 				assert.Equal(t, exp, k.acceptedAccountTypes)
 			},

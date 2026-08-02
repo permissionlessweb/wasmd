@@ -4,7 +4,7 @@
 [![codecov](https://codecov.io/gh/cosmwasm/wasmd/branch/main/graph/badge.svg)](https://codecov.io/gh/cosmwasm/wasmd)
 [![Go Report Card](https://goreportcard.com/badge/github.com/CosmWasm/wasmd)](https://goreportcard.com/report/github.com/CosmWasm/wasmd)
 [![license](https://img.shields.io/github/license/CosmWasm/wasmd.svg)](https://github.com/CosmWasm/wasmd/blob/main/LICENSE)
-[![LoC](https://tokei.rs/b1/github/CosmWasm/wasmd)](https://github.com/CosmWasm/wasmd)
+[![LoC](https://img.shields.io/github/languages/code-size/CosmWasm/wasmd)](https://github.com/CosmWasm/wasmd)
 
 <!-- [![GolangCI](https://golangci.com/badges/github.com/CosmWasm/wasmd.svg)](https://golangci.com/r/github.com/CosmWasm/wasmd) -->
 
@@ -14,7 +14,7 @@ This code was forked from the `cosmos/gaia` repository as a basis and then we ad
 many gaia-specific files. However, the `wasmd` binary should function just like `gaiad` except for the
 addition of the `x/wasm` module.
 
-**Note**: Requires [Go 1.21+](https://golang.org/dl/)
+**Note**: Requires [Go 1.25+](https://golang.org/dl/)
 
 For critical security issues & disclosure, see [SECURITY.md](SECURITY.md).
 
@@ -53,24 +53,29 @@ The following table shows
 - **Specified wasmvm version:** the wasmvm dependency that wasmd specifies in its own go.mod
 - **Compatible wasmvm version:** the versions you can use by setting it in your project's go.mod
 
-| wasmd  | compatible | specified                                                         |
-| ------ | ---------- | ----------------------------------------------------------------- |
-| 0.55.0 | 2.2.x      | [2.2.1](https://github.com/CosmWasm/wasmd/blob/v0.55.0/go.mod#L6) |
-| 0.54.0 | 2.2.x      | [2.2.1](https://github.com/CosmWasm/wasmd/blob/v0.54.0/go.mod#L6) |
-| 0.53.2 | 2.1.x      | [2.1.4](https://github.com/CosmWasm/wasmd/blob/v0.53.2/go.mod#L6) |
-| 0.53.1 | 2.1.x      | [2.1.4](https://github.com/CosmWasm/wasmd/blob/v0.53.1/go.mod#L6) |
-| 0.53.0 | 2.1.x      | [2.1.2](https://github.com/CosmWasm/wasmd/blob/v0.53.0/go.mod#L6) |
-| 0.52.0 | 2.1.x      | [2.1.0](https://github.com/CosmWasm/wasmd/blob/v0.52.0/go.mod#L6) |
-| 0.51.0 | 2.0.x      | [2.0.0](https://github.com/CosmWasm/wasmd/blob/v0.51.0/go.mod#L6) |
-| 0.50.0 | 1.5.x      | [1.5.0](https://github.com/CosmWasm/wasmd/blob/v0.50.0/go.mod#L6) |
-| 0.45.0 | 1.5.x      | [1.5.0](https://github.com/CosmWasm/wasmd/blob/v0.45.0/go.mod#L6) |
-| 0.44.0 | 1.5.x      | [1.5.0](https://github.com/CosmWasm/wasmd/blob/v0.44.0/go.mod#L6) |
-| 0.43.0 | 1.4.x      | [1.4.1](https://github.com/CosmWasm/wasmd/blob/v0.43.0/go.mod#L6) |
-| 0.42.0 | 1.4.x      | [1.4.1](https://github.com/CosmWasm/wasmd/blob/v0.42.0/go.mod#L6) |
-| 0.41.0 | 1.3.x      | [1.3.0](https://github.com/CosmWasm/wasmd/blob/v0.41.0/go.mod#L6) |
+| wasmd   | compatible | specified                                                          |
+| ------- | ---------- | ------------------------------------------------------------------ |
+| 0.70.3  | 3.0.x      | [3.0.7](https://github.com/CosmWasm/wasmd/blob/v0.70.3/go.mod#L14)  |
+| 0.61.14 | 3.0.x      | [3.0.7](https://github.com/CosmWasm/wasmd/blob/v0.61.14/go.mod#L8) |
+| 0.60.8  | 2.3.x      | [2.3.4](https://github.com/CosmWasm/wasmd/blob/v0.60.8/go.mod#L8)  |
+| 0.60.0  | 2.2.x      | [2.2.1](https://github.com/CosmWasm/wasmd/blob/v0.60.0/go.mod#L6)  |
+| 0.55.1  | 2.2.x      | [2.2.4](https://github.com/CosmWasm/wasmd/blob/v0.55.1/go.mod#L6)  |
+| 0.55.0  | 2.2.x      | [2.2.1](https://github.com/CosmWasm/wasmd/blob/v0.55.0/go.mod#L6)  |
+| 0.54.0  | 2.2.x      | [2.2.1](https://github.com/CosmWasm/wasmd/blob/v0.54.0/go.mod#L6)  |
+| 0.53.2  | 2.1.x      | [2.1.4](https://github.com/CosmWasm/wasmd/blob/v0.53.2/go.mod#L6)  |
+| 0.53.1  | 2.1.x      | [2.1.4](https://github.com/CosmWasm/wasmd/blob/v0.53.1/go.mod#L6)  |
+| 0.53.0  | 2.1.x      | [2.1.2](https://github.com/CosmWasm/wasmd/blob/v0.53.0/go.mod#L6)  |
+| 0.52.0  | 2.1.x      | [2.1.0](https://github.com/CosmWasm/wasmd/blob/v0.52.0/go.mod#L6)  |
+| 0.51.0  | 2.0.x      | [2.0.0](https://github.com/CosmWasm/wasmd/blob/v0.51.0/go.mod#L6)  |
+| 0.50.0  | 1.5.x      | [1.5.0](https://github.com/CosmWasm/wasmd/blob/v0.50.0/go.mod#L6)  |
+| 0.45.0  | 1.5.x      | [1.5.0](https://github.com/CosmWasm/wasmd/blob/v0.45.0/go.mod#L6)  |
+| 0.44.0  | 1.5.x      | [1.5.0](https://github.com/CosmWasm/wasmd/blob/v0.44.0/go.mod#L6)  |
+| 0.43.0  | 1.4.x      | [1.4.1](https://github.com/CosmWasm/wasmd/blob/v0.43.0/go.mod#L6)  |
+| 0.42.0  | 1.4.x      | [1.4.1](https://github.com/CosmWasm/wasmd/blob/v0.42.0/go.mod#L6)  |
+| 0.41.0  | 1.3.x      | [1.3.0](https://github.com/CosmWasm/wasmd/blob/v0.41.0/go.mod#L6)  |
 
 Dependency resolution in Go is not obvious. In case of doubt, please use
-`go list -m github.com/CosmWasm/wasmvm` to get the dynamically calculated version of the wasmvm dependency. Also check
+`go list -m github.com/CosmWasm/wasmvm/v3` to get the dynamically calculated version of the wasmvm dependency. Also check
 
 ```sh
 # Replace <node> with your binary name
@@ -87,16 +92,16 @@ For linux, the default is to build for glibc, and we cross-compile with CentOS 7
 backwards compatibility for `glibc 2.12+`. This includes all known supported distributions
 using glibc (CentOS 7 uses 2.12, obsolete Debian Jessie uses 2.19).
 
-As of `0.9.0` we support `muslc` Linux systems, in particular **Alpine linux**,
+As of `0.9.0` we support `musl` Linux systems, in particular **Alpine linux**,
 which is popular in docker distributions. Note that we do **not** store the
-static `muslc` build in the repo, so you must compile this yourself, and pass `-tags muslc`.
+static `musl` build in the repo, so you must compile this yourself, and pass `-tags musl`.
 Please look at the [`Dockerfile`](./Dockerfile) for an example of how we build a static Go
 binary for `muslc`. (Or just use this Dockerfile for your production setup).
 
 ## Stability
 
 **This is beta software** It is run in some production systems, but we cannot yet provide a stability guarantee
-and have not yet gone through and audit of this codebase. Note that the
+and have not yet gone through an audit of this codebase. Note that the
 [CosmWasm smart contract framework](https://github.com/CosmWasm/cosmwasm) used by `wasmd` is in a 1.0 release candidate
 as of March 2022, with stability guarantee and addressing audit results.
 

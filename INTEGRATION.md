@@ -42,8 +42,8 @@ hardware it runs on.
 
 We currently only support Intel/AMD64 CPUs and OSX or Linux. For Linux, the standard build
 commands work for `glibc` systems (Ubuntu, Debian, CentOS, etc). If you wish to compile
-for a `muslc` based system (like Alpine), you need to compile the static library `wasmvm` locally
-and compile go with the `muslc` build tag. Or just use the [Dockerfile](./Dockerfile),
+for a `musl` based system (like Alpine), you need to compile the static library `wasmvm` locally
+and compile go with the `musl` build tag. Or just use the [Dockerfile](./Dockerfile),
 which builds a static go binary in an Alpine system.
 
 This limit comes from the Rust dll we use to run the wasm code, which comes 
@@ -74,7 +74,7 @@ to `bank` and `staking`... more below on [customization](#Adding-Custom-Hooks)).
 
 The requirement here is that you have imported the standard sdk modules
 from the Cosmos SDK, and enabled them in `app.go`. If so, you can just look
-at [`wasmd/app/app.go`](https://github.com/CosmWasm/wasmd/blob/master/app/app.go)
+at [`wasmd/app/app.go`](https://github.com/CosmWasm/wasmd/blob/main/app/app.go)
 for how to do so (just search there for lines with `wasm`).
 
 `wasmd` also comes with 2 custom `ante handlers`: 
@@ -82,7 +82,7 @@ for how to do so (just search there for lines with `wasm`).
 * `LimitSimulationGasDecorator` prevents an "infinite gas" query
 
 In order to support these features you would need to add our custom
-ante handlers into the `ante handler chain` as in: [`app/ante.go`](https://github.com/CosmWasm/wasmd/blob/master/app/ante.go)
+ante handlers into the `ante handler chain` as in: [`app/ante.go`](https://github.com/CosmWasm/wasmd/blob/main/app/ante.go)
 
 ### Copied into your app
 
@@ -131,10 +131,8 @@ token contracts, your exchange code can simply call `wasm.Keeper.Execute`
 with a properly formatted message to move funds, or `wasm.Keeper.SmartQuery`
 to check balances.
 
-If you look at the unit tests in [`x/wasm/keeper`](https://github.com/CosmWasm/wasmd/tree/master/x/wasm/keeper),
+If you look at the unit tests in [`x/wasm/keeper`](https://github.com/CosmWasm/wasmd/tree/main/x/wasm/keeper),
 it should be pretty straight forward.
-
-<!-- TODO dead link above -->
 
 ### Extending the Contract Interface
 

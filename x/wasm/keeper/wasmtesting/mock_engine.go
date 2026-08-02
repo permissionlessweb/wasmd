@@ -58,6 +58,7 @@ type MockWasmEngine struct {
 	PinCircuitFn                   func(checksum wasmvm.Checksum) error
 	UnpinFn                        func(checksum wasmvm.Checksum) error
 	UnpinCircuitFn                 func(checksum wasmvm.Checksum) error
+	SyncPinnedCodesFn             func(checksums []wasmvm.Checksum) error
 	GetMetricsFn                   func() (*wasmvmtypes.Metrics, error)
 	GetPinMetricsFn                func() (*wasmvmtypes.PinnedMetrics, error)
 }
@@ -315,7 +316,14 @@ func (m *MockWasmEngine) UnpinCircuit(checksum wasmvm.Checksum) error {
 	if m.UnpinCircuitFn == nil {
 		panic("not supposed to be called!")
 	}
-	return m.UnpinCircuit(checksum)
+	return m.UnpinCircuitFn(checksum)
+}
+
+func (m *MockWasmEngine) SyncPinnedCodes(checksums []wasmvm.Checksum) error {
+	if m.SyncPinnedCodesFn == nil {
+		panic("not supposed to be called!")
+	}
+	return m.SyncPinnedCodesFn(checksums)
 }
 
 func (m *MockWasmEngine) GetMetrics() (*wasmvmtypes.Metrics, error) {

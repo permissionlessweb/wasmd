@@ -15,17 +15,17 @@ import (
 
 	wasmvm "github.com/CosmWasm/wasmvm/v3"
 	wasmvmtypes "github.com/CosmWasm/wasmvm/v3/types"
-	channeltypes "github.com/cosmos/ibc-go/v10/modules/core/04-channel/types"
+	channeltypes "github.com/cosmos/ibc-go/v11/modules/core/04-channel/types"
 
 	"cosmossdk.io/collections"
 	corestoretypes "cosmossdk.io/core/store"
 	errorsmod "cosmossdk.io/errors"
-	"cosmossdk.io/log"
-	"cosmossdk.io/store/prefix"
-	storetypes "cosmossdk.io/store/types"
+	"cosmossdk.io/log/v2"
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/runtime"
+	"github.com/cosmos/cosmos-sdk/store/v2/prefix"
+	storetypes "github.com/cosmos/cosmos-sdk/store/v2/types"
 	"github.com/cosmos/cosmos-sdk/telemetry"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
@@ -80,7 +80,7 @@ type WasmVMResponseHandler interface {
 // list of account types that are accepted for wasm contracts. Chains importing wasmd
 // can overwrite this list with the WithAcceptedAccountTypesOnContractInstantiation option.
 var defaultAcceptedAccountTypes = map[reflect.Type]struct{}{
-	reflect.TypeOf(&authtypes.BaseAccount{}): {},
+	reflect.TypeFor[*authtypes.BaseAccount](): {},
 }
 
 // Keeper will have a reference to Wasm Engine with it's own data directory.
@@ -1013,7 +1013,7 @@ func (k Keeper) instantiate(
 	addressGenerator AddressGenerator,
 	authPolicy types.AuthorizationPolicy,
 ) (sdk.AccAddress, []byte, error) {
-	defer telemetry.MeasureSince(time.Now(), "wasm", "contract", "instantiate")
+	defer telemetry.MeasureSince(time.Now(), "wasm", "contract", "instantiate") // nolint:staticcheck // TODO update to OTEL
 
 	if creator == nil {
 		return nil, nil, types.ErrEmpty.Wrap("creator")
@@ -1158,7 +1158,7 @@ func (k Keeper) instantiate(
 
 // Execute executes the contract instance
 func (k Keeper) execute(ctx context.Context, contractAddress, caller sdk.AccAddress, msg []byte, coins sdk.Coins) ([]byte, error) {
-	defer telemetry.MeasureSince(time.Now(), "wasm", "contract", "execute")
+	defer telemetry.MeasureSince(time.Now(), "wasm", "contract", "execute") // nolint:staticcheck // TODO update to OTEL
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	contractInfo, codeInfo, prefixStore, err := k.contractInstance(ctx, contractAddress)
 	if err != nil {
@@ -1218,7 +1218,7 @@ func (k Keeper) migrate(
 	msg []byte,
 	authZ types.AuthorizationPolicy,
 ) ([]byte, error) {
-	defer telemetry.MeasureSince(time.Now(), "wasm", "contract", "migrate")
+	defer telemetry.MeasureSince(time.Now(), "wasm", "contract", "migrate") // nolint:staticcheck // TODO update to OTEL
 
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 
@@ -1374,7 +1374,7 @@ func (k Keeper) callMigrateEntrypoint(
 // The policy will be read in msgServer.selectAuthorizationPolicy and used for sub-message executions.
 // This is an extension point for some very advanced scenarios only. Use with care!
 func (k Keeper) Sudo(ctx context.Context, contractAddress sdk.AccAddress, msg []byte) ([]byte, error) {
-	defer telemetry.MeasureSince(time.Now(), "wasm", "contract", "sudo")
+	defer telemetry.MeasureSince(time.Now(), "wasm", "contract", "sudo") // nolint:staticcheck // TODO update to OTEL
 
 	contractInfo, codeInfo, prefixStore, err := k.contractInstance(ctx, contractAddress)
 	if err != nil {
@@ -1622,7 +1622,7 @@ func (k Keeper) mustGetLastContractHistoryEntry(ctx context.Context, contractAdd
 
 // QuerySmart queries the smart contract itself.
 func (k Keeper) QuerySmart(ctx context.Context, contractAddr sdk.AccAddress, req []byte) ([]byte, error) {
-	defer telemetry.MeasureSince(time.Now(), "wasm", "contract", "query-smart")
+	defer telemetry.MeasureSince(time.Now(), "wasm", "contract", "query-smart") // nolint:staticcheck // TODO update to OTEL
 
 	// checks and increase query stack size
 	sdkCtx, err := checkAndIncreaseQueryStackSize(sdk.UnwrapSDKContext(ctx), k.maxQueryStackSize)
@@ -1692,7 +1692,7 @@ func checkAndIncreaseCallDepth(ctx context.Context, maxCallDepth uint32) (sdk.Co
 
 // QueryRaw returns the contract's state for give key. Returns `nil` when key is `nil`.
 func (k Keeper) QueryRaw(ctx context.Context, contractAddress sdk.AccAddress, key []byte) []byte {
-	defer telemetry.MeasureSince(time.Now(), "wasm", "contract", "query-raw")
+	defer telemetry.MeasureSince(time.Now(), "wasm", "contract", "query-raw") // nolint:staticcheck // TODO update to OTEL
 	if key == nil {
 		return nil
 	}
@@ -1702,7 +1702,7 @@ func (k Keeper) QueryRaw(ctx context.Context, contractAddress sdk.AccAddress, ke
 }
 
 func (k Keeper) QueryRawRange(ctx context.Context, contractAddress sdk.AccAddress, start, end []byte, limit uint16, reverse bool) (results []wasmvmtypes.RawRangeEntry, nextKey []byte) {
-	defer telemetry.MeasureSince(time.Now(), "wasm", "contract", "query-raw-range")
+	defer telemetry.MeasureSince(time.Now(), "wasm", "contract", "query-raw-range") // nolint:staticcheck // TODO update to OTEL
 
 	prefixStoreKey := types.GetContractStorePrefix(contractAddress)
 	prefixStore := prefix.NewStore(runtime.KVStoreAdapter(k.storeService.OpenKVStore(ctx)), prefixStoreKey)
@@ -2046,19 +2046,34 @@ func (k Keeper) GetByteCode(ctx context.Context, codeID uint64) ([]byte, error) 
 	return k.wasmVM.GetCode(codeInfo.CodeHash)
 }
 
-// PinCode pins the wasm contract in wasmvm cache
+// pinCode pins the wasm contract in wasmvm cache
 func (k Keeper) pinCode(ctx context.Context, codeID uint64) error {
 	codeInfo := k.GetCodeInfo(ctx, codeID)
 	if codeInfo == nil {
 		return types.ErrNoSuchCodeFn(codeID).Wrapf("code id %d", codeID)
 	}
 
-	if err := k.wasmVM.Pin(codeInfo.CodeHash); err != nil {
-		return errorsmod.Wrap(types.ErrPinContractFailed, err.Error())
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	pinCost := k.gasRegister.PinCodeCost()
+	sdkCtx.GasMeter().ConsumeGas(pinCost, "Loading CosmWasm module: pin code")
+
+	// Collect all currently pinned checksums
+	checksums, err := k.collectPinnedChecksums(ctx, nil)
+	if err != nil {
+		return err
 	}
-	store := k.storeService.OpenKVStore(ctx)
+
+	// Add the new code to pin
+	checksums = append(checksums, codeInfo.CodeHash)
+
+	err = k.wasmVM.SyncPinnedCodes(checksums)
+	if err != nil {
+		return errorsmod.Wrap(types.ErrSyncPinnedCodesFailed, err.Error())
+	}
+
+	kvStore := k.storeService.OpenKVStore(ctx)
 	// store 1 byte to not run into `nil` debugging issues
-	err := store.Set(types.GetPinnedCodeIndexPrefix(codeID), []byte{1})
+	err = kvStore.Set(types.GetPinnedCodeIndexPrefix(codeID), []byte{1})
 	if err != nil {
 		return err
 	}
@@ -2094,18 +2109,30 @@ func (k Keeper) pinCircuit(ctx context.Context, zkID uint64) error {
 	return nil
 }
 
-// UnpinCode removes the wasm contract from wasmvm cache
+// unpinCode removes the wasm contract from wasmvm cache
 func (k Keeper) unpinCode(ctx context.Context, codeID uint64) error {
 	codeInfo := k.GetCodeInfo(ctx, codeID)
 	if codeInfo == nil {
 		return types.ErrNoSuchCodeFn(codeID).Wrapf("code id %d", codeID)
 	}
-	if err := k.wasmVM.Unpin(codeInfo.CodeHash); err != nil {
-		return errorsmod.Wrap(types.ErrUnpinContractFailed, err.Error())
+
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	unpinCost := k.gasRegister.UnpinCodeCost()
+	sdkCtx.GasMeter().ConsumeGas(unpinCost, "Loading CosmWasm module: unpin code")
+
+	// Collect all pinned checksums except the one we're unpinning
+	checksums, err := k.collectPinnedChecksums(ctx, &codeID)
+	if err != nil {
+		return err
 	}
 
-	store := k.storeService.OpenKVStore(ctx)
-	err := store.Delete(types.GetPinnedCodeIndexPrefix(codeID))
+	err = k.wasmVM.SyncPinnedCodes(checksums)
+	if err != nil {
+		return errorsmod.Wrap(types.ErrSyncPinnedCodesFailed, err.Error())
+	}
+
+	kvStore := k.storeService.OpenKVStore(ctx)
+	err = kvStore.Delete(types.GetPinnedCodeIndexPrefix(codeID))
 	if err != nil {
 		return err
 	}
@@ -2148,6 +2175,32 @@ func (k Keeper) IsPinnedCircuit(ctx context.Context, zkID uint64) bool {
 		panic(err)
 	}
 	return ok
+}
+
+
+// collectPinnedChecksums collects checksums for all pinned codes, optionally excluding one
+func (k Keeper) collectPinnedChecksums(ctx context.Context, excludeCodeID *uint64) ([]wasmvm.Checksum, error) {
+	store := prefix.NewStore(runtime.KVStoreAdapter(k.storeService.OpenKVStore(ctx)), types.PinnedCodeIndexPrefix)
+	iter := store.Iterator(nil, nil)
+	defer iter.Close()
+
+	checksums := make([]wasmvm.Checksum, 0)
+	for ; iter.Valid(); iter.Next() {
+		pinnedCodeID := types.ParsePinnedCodeIndex(iter.Key())
+
+		// Skip the excluded code ID if specified
+		if excludeCodeID != nil && pinnedCodeID == *excludeCodeID {
+			continue
+		}
+
+		codeInfo := k.GetCodeInfo(ctx, pinnedCodeID)
+		if codeInfo == nil {
+			return nil, types.ErrNoSuchCodeFn(pinnedCodeID).Wrapf("code id %d", pinnedCodeID)
+		}
+		checksums = append(checksums, codeInfo.CodeHash)
+	}
+
+	return checksums, nil
 }
 
 // IsPinnedCode returns true when codeID is pinned in wasmvm cache
@@ -2215,15 +2268,22 @@ func (k Keeper) InitializePinnedCodes(ctx context.Context) error {
 	iter := store.Iterator(nil, nil)
 	defer iter.Close()
 
+	checksums := make([]wasmvm.Checksum, 0)
 	for ; iter.Valid(); iter.Next() {
 		codeID := types.ParsePinnedCodeIndex(iter.Key())
 		codeInfo := k.GetCodeInfo(ctx, codeID)
 		if codeInfo == nil {
 			return types.ErrNoSuchCodeFn(codeID).Wrapf("code id %d", codeID)
 		}
-		if err := k.wasmVM.Pin(codeInfo.CodeHash); err != nil {
-			return errorsmod.Wrap(types.ErrPinContractFailed, err.Error())
-		}
+		checksums = append(checksums, codeInfo.CodeHash)
+	}
+
+	if len(checksums) == 0 {
+		return nil
+	}
+
+	if err := k.wasmVM.SyncPinnedCodes(checksums); err != nil {
+		return errorsmod.Wrap(types.ErrPinContractFailed, err.Error())
 	}
 	return nil
 }
@@ -2557,7 +2617,7 @@ type msgDispatcher interface {
 }
 
 // DefaultWasmVMContractResponseHandler default implementation that first dispatches submessage then normal messages.
-// The Submessage execution may include an success/failure response handling by the contract that can overwrite the
+// The Submessage execution may include a success/failure response handling by the contract that can overwrite the
 // original
 type DefaultWasmVMContractResponseHandler struct {
 	md msgDispatcher
