@@ -379,7 +379,10 @@ type WasmEngine interface {
 
 	// UnpinCircuit functions like unpin but for zk-circuit binary files.
 	UnpinCircuit(checksum wasmvm.Checksum) error
+	// SyncPinnedCodes bulk-syncs pinned Wasm module checksums (upstream v3.0.x).
 	SyncPinnedCodes(checksums []wasmvm.Checksum) error
+	// SyncPinnedCircuits bulk-syncs pinned circuit keys (72-byte CircuitHash).
+	SyncPinnedCircuits(circuitKeys []wasmvm.Checksum) error
 
 	// GetMetrics some internal metrics for monitoring purposes.
 	GetMetrics() (*wasmvmtypes.Metrics, error)

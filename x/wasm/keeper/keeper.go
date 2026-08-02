@@ -2085,19 +2085,26 @@ func (k Keeper) pinCode(ctx context.Context, codeID uint64) error {
 	return nil
 }
 
-// PinCode pins the wasm contract in wasmvm cache
+// pinCircuit pins the zk circuit in wasmvm cache using bulk sync (mirrors pinCode / SyncPinnedCodes).
 func (k Keeper) pinCircuit(ctx context.Context, zkID uint64) error {
 	zkInfo := k.GetCircuitInfo(ctx, zkID)
 	if zkInfo == nil {
 		return types.ErrNoSuchCodeFn(zkID).Wrapf("zk id %d", zkID)
 	}
 
-	if err := k.wasmVM.PinCircuit(zkInfo.CircuitHash); err != nil {
+	// Collect all currently pinned circuit keys, then add this one.
+	keys, err := k.collectPinnedCircuitKeys(ctx, nil)
+	if err != nil {
+		return err
+	}
+	keys = append(keys, zkInfo.CircuitHash)
+
+	if err := k.wasmVM.SyncPinnedCircuits(keys); err != nil {
 		return errorsmod.Wrap(types.ErrPinCircuitFailed, err.Error())
 	}
 	store := k.storeService.OpenKVStore(ctx)
 	// store 1 byte to not run into `nil` debugging issues
-	err := store.Set(types.GetPinnedCircuitIndexPrefix(zkID), []byte{1})
+	err = store.Set(types.GetPinnedCircuitIndexPrefix(zkID), []byte{1})
 	if err != nil {
 		return err
 	}
@@ -2144,18 +2151,23 @@ func (k Keeper) unpinCode(ctx context.Context, codeID uint64) error {
 	return nil
 }
 
-// UnpinCode removes the wasm contract from wasmvm cache
+// unpinCircuit removes the zk circuit from wasmvm cache via bulk sync (mirrors unpinCode).
 func (k Keeper) unpinCircuit(ctx context.Context, zkID uint64) error {
 	zkInfo := k.GetCircuitInfo(ctx, zkID)
 	if zkInfo == nil {
 		return types.ErrNoSuchCodeFn(zkID).Wrapf("zk-circuit id %d", zkID)
 	}
-	if err := k.wasmVM.UnpinCircuit(zkInfo.CircuitHash); err != nil {
+
+	keys, err := k.collectPinnedCircuitKeys(ctx, &zkID)
+	if err != nil {
+		return err
+	}
+	if err := k.wasmVM.SyncPinnedCircuits(keys); err != nil {
 		return errorsmod.Wrap(types.ErrUnpinCircuitFailed, err.Error())
 	}
 
 	store := k.storeService.OpenKVStore(ctx)
-	err := store.Delete(types.GetPinnedCircuitIndexPrefix(zkID))
+	err = store.Delete(types.GetPinnedCircuitIndexPrefix(zkID))
 	if err != nil {
 		return err
 	}
@@ -2203,6 +2215,27 @@ func (k Keeper) collectPinnedChecksums(ctx context.Context, excludeCodeID *uint6
 	return checksums, nil
 }
 
+// collectPinnedCircuitKeys collects CircuitHash keys for all pinned circuits, optionally excluding one zkID.
+func (k Keeper) collectPinnedCircuitKeys(ctx context.Context, excludeZkID *uint64) ([]wasmvm.Checksum, error) {
+	store := prefix.NewStore(runtime.KVStoreAdapter(k.storeService.OpenKVStore(ctx)), types.PinnedCircuitsIndexPrefix)
+	iter := store.Iterator(nil, nil)
+	defer iter.Close()
+
+	keys := make([]wasmvm.Checksum, 0)
+	for ; iter.Valid(); iter.Next() {
+		zkID := types.ParsePinnedCircuitIndex(iter.Key())
+		if excludeZkID != nil && zkID == *excludeZkID {
+			continue
+		}
+		info := k.GetCircuitInfo(ctx, zkID)
+		if info == nil {
+			return nil, types.ErrNoSuchCircuitFn(zkID).Wrapf("zk-circuit id %d", zkID)
+		}
+		keys = append(keys, info.CircuitHash)
+	}
+	return keys, nil
+}
+
 // IsPinnedCode returns true when codeID is pinned in wasmvm cache
 func (k Keeper) IsPinnedCode(ctx context.Context, codeID uint64) bool {
 	store := k.storeService.OpenKVStore(ctx)
@@ -2229,35 +2262,24 @@ func (k Keeper) checkDiscountEligibility(ctx sdk.Context, checksum []byte, isPin
 	return types.WithTxContracts(ctx, txContracts), false
 }
 
-// InitalizedPinnedCodesAndCircuits updates wasmvm to pin to cache all contracts marked as pinned
+// InitalizedPinnedCodesAndCircuits updates wasmvm to pin to cache all contracts and circuits marked as pinned.
+// Uses bulk SyncPinnedCodes / SyncPinnedCircuits (upstream pin semantics) for restart-safe rehydrate.
 func (k Keeper) InitalizedPinnedCodesAndCircuits(ctx context.Context) error {
-	store := prefix.NewStore(runtime.KVStoreAdapter(k.storeService.OpenKVStore(ctx)), types.PinnedCodeIndexPrefix)
-	circuitstore := prefix.NewStore(runtime.KVStoreAdapter(k.storeService.OpenKVStore(ctx)), types.PinnedCircuitsIndexPrefix)
-	iter := store.Iterator(nil, nil)
-	circuititer := circuitstore.Iterator(nil, nil)
-	defer iter.Close()
-	defer circuititer.Close()
-
-	for ; circuititer.Valid(); circuititer.Next() {
-		zkID := types.ParsePinnedCircuitIndex(circuititer.Key())
-		circuitInfo := k.GetCircuitInfo(ctx, zkID)
-		if circuitInfo == nil {
-			return types.ErrNoSuchCircuitFn(zkID).Wrapf("zk-circuit id %d", zkID)
-		}
-		if err := k.wasmVM.PinCircuit(circuitInfo.CircuitHash); err != nil {
-			return errorsmod.Wrap(types.ErrPinCircuitFailed, err.Error())
-		}
+	// Codes: one bulk sync (upstream v3.0.x pattern)
+	if err := k.InitializePinnedCodes(ctx); err != nil {
+		return err
 	}
 
-	for ; iter.Valid(); iter.Next() {
-		codeID := types.ParsePinnedCodeIndex(iter.Key())
-		codeInfo := k.GetCodeInfo(ctx, codeID)
-		if codeInfo == nil {
-			return types.ErrNoSuchCodeFn(codeID).Wrapf("code id %d", codeID)
-		}
-		if err := k.wasmVM.Pin(codeInfo.CodeHash); err != nil {
-			return errorsmod.Wrap(types.ErrPinContractFailed, err.Error())
-		}
+	// Circuits: bulk sync of 72-byte keys
+	keys, err := k.collectPinnedCircuitKeys(ctx, nil)
+	if err != nil {
+		return err
+	}
+	if len(keys) == 0 {
+		return nil
+	}
+	if err := k.wasmVM.SyncPinnedCircuits(keys); err != nil {
+		return errorsmod.Wrap(types.ErrPinCircuitFailed, err.Error())
 	}
 	return nil
 }
