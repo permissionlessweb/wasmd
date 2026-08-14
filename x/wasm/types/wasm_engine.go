@@ -15,15 +15,15 @@ const DefaultMaxCallDepth uint32 = 100
 // WasmEngine defines the WASM contract runtime engine.
 type WasmEngine interface {
 	// StoreCode will compile the Wasm code, and store the resulting compiled module
-	// as well as the original code. Both can be referenced later via Checksum.
+	// as well as the original code. create_with_circuit uses StoreCode then StoreCircuit (both checked).
 	// This must be done one time for given code, after which it can be
 	// instantiated many times, and each instance called many times.
 	//
 	// Returns both the checksum, as well as the gas cost of compilation (in CosmWasm Gas) or an error.
 	StoreCode(code wasmvm.WasmCode, gasLimit uint64) (wasmvm.Checksum, uint64, error)
 	StoreCircuit(zk wasmvm.CircuitBinary, gasLimit uint64) (wasmvm.Checksum, uint64, error)
-	// StoreCodeWithCircuit  will perform the same functions as StoreCode, but also stores a halo2 plonk circuit in pinned memory.
-	// Both can be referenced later via Checksum.
+	// StoreCodeWithCircuit stores Wasm (check_wasm) and a circuit (check_circuit). Returns [32-byte wasm checksum, 72-byte circuit key].
+	// create_with_circuit uses StoreCode then StoreCircuit (both checked).
 	//
 	// Returns both the checksum, as well as the gas cost of compilation (in CosmWasm Gas) or an error.
 	StoreCodeWithCircuit(code wasmvm.WasmCode, vk wasmvm.CircuitBinary, gasLimit uint64) ([]wasmvm.Checksum, uint64, error)

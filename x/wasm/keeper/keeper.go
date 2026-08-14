@@ -280,10 +280,11 @@ func (k Keeper) create_with_circuit(ctx context.Context, creator sdk.AccAddress,
 		return 0, 0, nil, types.ErrCreateFailed.Wrap("invalid wasm checksum length: expected 32, got " + strconv.Itoa(len(checksums[0])))
 	}
 	if len(checksums[1]) == 0 {
-		return 0, 0, nil, types.ErrCreateFailed.Wrap("circuit checksum is empty")
+		return 0, 0, nil, types.ErrCreateFailed.Wrap("circuit key is empty")
 	}
-	if len(checksums[1]) != 32 {
-		return 0, 0, nil, types.ErrCreateFailed.Wrap("invalid circuit checksum length: expected 32, got " + strconv.Itoa(len(checksums[1])))
+	// Path A identity is CircuitFooter::to_circuit_key (72), not SHA-256.
+	if len(checksums[1]) != wasmvm.CircuitKeyLen {
+		return 0, 0, nil, types.ErrCreateFailed.Wrap("invalid circuit key length: expected 72, got " + strconv.Itoa(len(checksums[1])))
 	}
 
 	// simulation gets default value for capabilities
