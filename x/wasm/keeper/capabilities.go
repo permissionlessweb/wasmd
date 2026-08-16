@@ -19,5 +19,6 @@ func BuiltInCapabilities() []string {
 		"cosmwasm_2_1",
 		"cosmwasm_2_2",
 		"ibc2",
+		"bulk_memory",
 	}
 }
