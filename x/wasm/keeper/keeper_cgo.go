@@ -14,6 +14,7 @@ import (
 	corestoretypes "cosmossdk.io/core/store"
 
 	"github.com/cosmos/cosmos-sdk/codec"
+	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/CosmWasm/wasmd/x/wasm/types"
 )
@@ -54,6 +55,10 @@ func NewKeeper(
 		maxCallDepth:         types.DefaultMaxCallDepth,
 		acceptedAccountTypes: defaultAcceptedAccountTypes,
 		params:               collections.NewItem(sb, types.ParamsKey, "params", codec.CollValue[types.Params](cdc)),
+		circuitDepositees:    collections.NewMap(sb, types.CircuitDepositeePrefix, "circuit_depositees", sdk.AccAddressKey, collections.Uint64Value),
+		circuitDepositYearly: sdk.NewInt64Coin(sdk.DefaultBondDenom, types.CircuitDepositYearlyAmount),
+		bankKeeper:           bankKeeper,
+		stakingKeeper:        stakingKeeper,
 		propagateGovAuthorization: map[types.AuthorizationPolicyAction]struct{}{
 			types.AuthZActionInstantiate: {},
 		},

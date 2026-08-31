@@ -158,6 +158,8 @@ var maccPerms = map[string][]string{
 	ibctransfertypes.ModuleName: {authtypes.Minter, authtypes.Burner},
 	icatypes.ModuleName:         nil,
 	wasmtypes.ModuleName:        {authtypes.Burner},
+	wasmtypes.CircuitValPoolName: nil,
+	wasmtypes.CircuitDevPoolName: {authtypes.Staking},
 }
 
 var (

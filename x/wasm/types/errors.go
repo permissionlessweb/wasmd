@@ -93,16 +93,18 @@ var (
 	// ErrExceedMaxCallDepth error if max message stack size is exceeded
 	ErrExceedMaxCallDepth = errorsmod.Register(DefaultCodespace, 30, "max call depth exceeded")
 
-// ErrSyncPinnedCodesFailed error for syncing pinned codes failures
-ErrSyncPinnedCodesFailed = errorsmod.Register(DefaultCodespace, 31, "syncing pinned codes failed")
-// ErrUnpinCircuitFailed error for unpinning circuit failures
-ErrUnpinCircuitFailed = errorsmod.Register(DefaultCodespace, 32, "unpinning circuit failed")
-// ErrPinCircuitFailed error for pinning circuit failures
-ErrPinCircuitFailed = errorsmod.Register(DefaultCodespace, 33, "pinning circuit failed")
-// ErrNoSuchCircuitFn factory when a circuit id does not exist
-ErrNoSuchCircuitFn = WasmVMFlavouredErrorFactory(errorsmod.Register(DefaultCodespace, 34, "no such circuit"),
-	func(id uint64) error { return wasmvmtypes.NoSuchCircuit{ZkID: id} },
-)
+	// ErrSyncPinnedCodesFailed error for syncing pinned codes failures
+	ErrSyncPinnedCodesFailed = errorsmod.Register(DefaultCodespace, 31, "syncing pinned codes failed")
+	// ErrUnpinCircuitFailed error for unpinning circuit failures
+	ErrUnpinCircuitFailed = errorsmod.Register(DefaultCodespace, 32, "unpinning circuit failed")
+	// ErrPinCircuitFailed error for pinning circuit failures
+	ErrPinCircuitFailed = errorsmod.Register(DefaultCodespace, 33, "pinning circuit failed")
+	// ErrNoSuchCircuitFn factory when a circuit id does not exist
+	ErrNoSuchCircuitFn = WasmVMFlavouredErrorFactory(errorsmod.Register(DefaultCodespace, 34, "no such circuit"),
+		func(id uint64) error { return wasmvmtypes.NoSuchCircuit{ZkID: id} },
+	)
+	// ErrCircuitDepositRequired when CircuitUploadAccess denies the actor and they have no active deposit.
+	ErrCircuitDepositRequired = errorsmod.Register(DefaultCodespace, 35, "circuit deposit required")
 )
 
 // WasmVMErrorable mapped error type in wasmvm and are not redacted

@@ -54,6 +54,16 @@ var (
 	CircuitBytesPrefix        = []byte{0x19}
 	CircuitsByCreatorPrefix   = []byte{0x18}
 	PinnedCircuitsIndexPrefix = []byte{0x07}
+	// CircuitDepositeePrefix maps depositor AccAddress -> paid_until unix seconds.
+	// Presence of an unexpired row is an additional CircuitUploadAccess path
+	// (allowlisted / Everybody / gov still skip payment).
+	CircuitDepositeePrefix = []byte{0x1A}
+	// CircuitDepositExpiryPrefix is paid_until BE || length-prefixed addr for range GC.
+	CircuitDepositExpiryPrefix = []byte{0x1B}
+	// CircuitDepositGCPrefix marks a depositor whose circuits still need blob prune.
+	CircuitDepositGCPrefix = []byte{0x1C}
+	// CircuitByCreatorIDPrefix maps creator → zk_id for bounded GC (not the unused 0x18 layout).
+	CircuitByCreatorIDPrefix = []byte{0x1D}
 
 	KeySequenceCircuitID  = append(SequenceKeyPrefix, []byte("lastPlonkishCircuit")...)
 	KeySequenceVkParamID  = append(SequenceKeyPrefix, []byte("lastVkParamId")...)
@@ -100,6 +110,50 @@ func GetCircuitInfoKey(zkId uint64) []byte {
 func GetCircuitBytesKey(zkId uint64) []byte {
 	circuitIdBz := sdk.Uint64ToBigEndian(zkId)
 	return append(CircuitBytesPrefix, circuitIdBz...)
+}
+
+// GetCircuitDepositExpiryKey is relative to CircuitDepositExpiryPrefix: until_be || len-prefixed addr.
+func GetCircuitDepositExpiryKey(until uint64, addr sdk.AccAddress) []byte {
+	ap := address.MustLengthPrefix(addr)
+	r := make([]byte, 8+len(ap))
+	copy(r[0:8], sdk.Uint64ToBigEndian(until))
+	copy(r[8:], ap)
+	return r
+}
+
+func ParseCircuitDepositExpiryKey(key []byte) (until uint64, addr sdk.AccAddress, ok bool) {
+	if len(key) < 9 {
+		return 0, nil, false
+	}
+	until = sdk.BigEndianToUint64(key[:8])
+	n := int(key[8])
+	if n <= 0 || len(key) < 9+n {
+		return 0, nil, false
+	}
+	return until, sdk.AccAddress(key[9 : 9+n]), true
+}
+
+func GetCircuitDepositGCKey(addr sdk.AccAddress) []byte {
+	return address.MustLengthPrefix(addr)
+}
+
+func ParseCircuitDepositGCKey(key []byte) (sdk.AccAddress, bool) {
+	if len(key) < 1 {
+		return nil, false
+	}
+	n := int(key[0])
+	if n <= 0 || len(key) < 1+n {
+		return nil, false
+	}
+	return sdk.AccAddress(key[1 : 1+n]), true
+}
+
+func GetCircuitByCreatorIDPrefix(creator sdk.AccAddress) []byte {
+	return append(CircuitByCreatorIDPrefix, address.MustLengthPrefix(creator)...)
+}
+
+func GetCircuitByCreatorIDKey(creator sdk.AccAddress, zkID uint64) []byte {
+	return append(GetCircuitByCreatorIDPrefix(creator), sdk.Uint64ToBigEndian(zkID)...)
 }
 
 // GetContractAddressKey returns the key for the WASM contract instance

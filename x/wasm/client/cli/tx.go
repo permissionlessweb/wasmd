@@ -68,6 +68,7 @@ func GetTxCmd() *cobra.Command {
 		StoreVkParamCmd(),
 		StoreCircuitCmd(),
 		StoreFullCircuitCmd(),
+		PayCircuitDepositCmd(),
 		StoreCodeCmd(),
 		InstantiateContractCmd(),
 		InstantiateContract2Cmd(),
@@ -106,6 +107,34 @@ func StoreVkParamCmd() *cobra.Command {
 	cmd.Flags().Uint64(flagCircuitType, 0, "prover / circuit type id")
 	cmd.Flags().Uint64(flagCurveType, 0, "curve type id")
 	cmd.Flags().Uint64(flagK, 0, "halo2 k (required, non-zero)")
+	flags.AddTxFlagsToCmd(cmd)
+	return cmd
+}
+
+func PayCircuitDepositCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "pay-circuit-deposit [years]",
+		Short: "Pay yearly circuit-upload coverage (allowlisted uploaders skip this)",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			clientCtx, err := client.GetClientTxContext(cmd)
+			if err != nil {
+				return err
+			}
+			years, err := strconv.ParseUint(args[0], 10, 32)
+			if err != nil {
+				return err
+			}
+			msg := &types.MsgPayCircuitDeposit{
+				Sender: clientCtx.GetFromAddress().String(),
+				Years:  uint32(years),
+			}
+			if err := msg.ValidateBasic(); err != nil {
+				return err
+			}
+			return tx.GenerateOrBroadcastTxCLI(clientCtx, cmd.Flags(), msg)
+		},
+	}
 	flags.AddTxFlagsToCmd(cmd)
 	return cmd
 }

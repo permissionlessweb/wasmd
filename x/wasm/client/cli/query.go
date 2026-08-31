@@ -44,6 +44,7 @@ func GetQueryCmd() *cobra.Command {
 		GetCmdQueryParams(),
 		GetCmdBuildAddress(),
 		GetCmdListContractsByCreator(),
+		GetCmdQueryCircuitDeposit(),
 	)
 	return queryCmd
 }
@@ -792,6 +793,28 @@ func withPageKeyDecoded(flagSet *flag.FlagSet) *flag.FlagSet {
 
 // GetCmdQueryParams implements a command to return the current wasm
 // parameters.
+func GetCmdQueryCircuitDeposit() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "circuit-deposit [address]",
+		Short: "Query prepaid circuit-upload coverage for an address",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			clientCtx, err := client.GetClientQueryContext(cmd)
+			if err != nil {
+				return err
+			}
+			res, err := types.NewCircuitDepositQueryClient(clientCtx).Deposit(cmd.Context(), &types.QueryCircuitDepositRequest{Address: args[0]})
+			if err != nil {
+				return err
+			}
+			return clientCtx.PrintProto(res)
+		},
+		SilenceUsage: true,
+	}
+	flags.AddQueryFlagsToCmd(cmd)
+	return cmd
+}
+
 func GetCmdQueryParams() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "params",

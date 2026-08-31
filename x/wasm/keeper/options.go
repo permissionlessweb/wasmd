@@ -26,6 +26,13 @@ func (f postOptsFn) apply(keeper *Keeper) {
 
 // WithWasmEngine is an optional constructor parameter to replace the default wasmVM engine with the
 // given one.
+// WithCircuitDepositYearly sets the coin charged per prepaid year of circuit-upload coverage.
+func WithCircuitDepositYearly(c sdk.Coin) Option {
+	return optsFn(func(k *Keeper) {
+		k.circuitDepositYearly = c
+	})
+}
+
 func WithWasmEngine(x types.WasmEngine) Option {
 	return optsFn(func(k *Keeper) {
 		k.wasmVM = x

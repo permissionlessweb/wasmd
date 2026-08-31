@@ -254,6 +254,8 @@ func createTestInput(
 		govtypes.ModuleName:            {authtypes.Burner},
 		ibctransfertypes.ModuleName:    {authtypes.Minter, authtypes.Burner},
 		types.ModuleName:               {authtypes.Burner},
+		types.CircuitValPoolName:       nil,
+		types.CircuitDevPoolName:       {authtypes.Staking},
 	}
 
 	accountKeeper := authkeeper.NewAccountKeeper(

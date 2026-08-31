@@ -99,7 +99,10 @@ func (b AppModuleBasic) RegisterInterfaces(registry cdctypes.InterfaceRegistry) 
 }
 
 // ____________________________________________________________________________
-var _ appmodule.AppModule = AppModule{}
+var (
+	_ appmodule.AppModule     = AppModule{}
+	_ appmodule.HasEndBlocker = AppModule{}
+)
 
 // AppModule implements an application module for the wasm module.
 type AppModule struct {
@@ -144,6 +147,12 @@ func (am AppModule) IsOnePerModuleType() { // marker
 func (am AppModule) IsAppModule() { // marker
 }
 
+func (am AppModule) EndBlock(ctx context.Context) error {
+	am.keeper.DistributeCircuitValPool(ctx)
+	am.keeper.PruneExpiredCircuitDeposits(ctx)
+	return nil
+}
+
 // ConsensusVersion is a sequence number for state-breaking change of the
 // module. It should be incremented on each consensus-breaking change
 // introduced by the module. To avoid wrong/empty versions, the initial version
@@ -151,8 +160,11 @@ func (am AppModule) IsAppModule() { // marker
 func (AppModule) ConsensusVersion() uint64 { return 4 }
 
 func (am AppModule) RegisterServices(cfg module.Configurator) {
-	types.RegisterMsgServer(cfg.MsgServer(), keeper.NewMsgServerImpl(am.keeper))
+	msgServer := keeper.NewMsgServerImpl(am.keeper)
+	types.RegisterMsgServer(cfg.MsgServer(), msgServer)
 	types.RegisterQueryServer(cfg.QueryServer(), keeper.Querier(am.keeper))
+	// CircuitDeposit msg/query services are handmade (not in tx.proto / query.proto).
+	// Registering them on SDK routers panics: no method descriptor.
 
 	m := keeper.NewMigrator(*am.keeper, am.legacySubspace)
 	err := cfg.RegisterMigration(types.ModuleName, 1, m.Migrate1to2)

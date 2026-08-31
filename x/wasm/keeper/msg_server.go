@@ -11,7 +11,10 @@ import (
 	"github.com/CosmWasm/wasmd/x/wasm/types"
 )
 
-var _ types.MsgServer = msgServer{}
+var (
+	_ types.MsgServer               = msgServer{}
+	_ types.CircuitDepositMsgServer = msgServer{}
+)
 
 // grpc message server implementation
 type msgServer struct {
@@ -62,16 +65,31 @@ func (m msgServer) StoreFullCircuit(ctx context.Context, msg *types.MsgStoreFull
 		return nil, err
 	}
 	return &types.MsgStoreFullCircuitResponse{
-		CsParamId:   paramID,
-		ZkId:        zkID,
-		CsChecksum:  paramChecksum,
-		VkChecksum:  circuitChecksum,
+		CsParamId:  paramID,
+		ZkId:       zkID,
+		CsChecksum: paramChecksum,
+		VkChecksum: circuitChecksum,
 	}, nil
 }
 
 // NewMsgServerImpl default constructor
 func NewMsgServerImpl(k *Keeper) types.MsgServer {
 	return &msgServer{keeper: k}
+}
+
+func (m msgServer) PayCircuitDeposit(ctx context.Context, msg *types.MsgPayCircuitDeposit) (*types.MsgPayCircuitDepositResponse, error) {
+	if err := msg.ValidateBasic(); err != nil {
+		return nil, err
+	}
+	payer, err := sdk.AccAddressFromBech32(msg.Sender)
+	if err != nil {
+		return nil, errorsmod.Wrap(err, "sender")
+	}
+	until, err := m.keeper.PayCircuitDeposit(ctx, payer, msg.Years)
+	if err != nil {
+		return nil, err
+	}
+	return &types.MsgPayCircuitDepositResponse{PaidUntilUnix: until}, nil
 }
 
 // // StoreCodeWithCircuit stores both WASM and VK code on chain

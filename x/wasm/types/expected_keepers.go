@@ -28,6 +28,7 @@ type BankViewKeeper interface {
 type Burner interface {
 	BurnCoins(ctx context.Context, moduleName string, amt sdk.Coins) error
 	SendCoinsFromAccountToModule(ctx context.Context, senderAddr sdk.AccAddress, recipientModule string, amt sdk.Coins) error
+	SendCoinsFromModuleToAccount(ctx context.Context, senderModule string, recipientAddr sdk.AccAddress, amt sdk.Coins) error
 }
 
 // BankKeeper defines a subset of methods implemented by the cosmos-sdk bank keeper

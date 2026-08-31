@@ -102,6 +102,11 @@ type Keeper struct {
 	acceptedAccountTypes map[reflect.Type]struct{}
 	accountPruner        AccountPruner
 	params               collections.Item[types.Params]
+	// circuitDepositees is address -> paid_until unix. One extra CircuitUploadAccess path.
+	circuitDepositees    collections.Map[sdk.AccAddress, uint64]
+	circuitDepositYearly sdk.Coin
+	bankKeeper           types.BankKeeper
+	stakingKeeper        types.StakingKeeper
 	// propagate gov authZ to sub-messages
 	propagateGovAuthorization map[types.AuthorizationPolicyAction]struct{}
 
@@ -303,6 +308,9 @@ func (k Keeper) create_with_circuit(ctx context.Context, creator sdk.AccAddress,
 	vkInfo := types.NewCircuitInfo(checksums[1], creator, *instantiateAccess)
 	k.mustStoreCodeInfo(sdkCtx, codeID, codeInfo)
 	k.mustStoreCircuitInfo(sdkCtx, uint64(zkIDUint32), vkInfo)
+	if err := k.setCircuitCreatorIndex(sdkCtx, creator, uint64(zkIDUint32)); err != nil {
+		return 0, 0, nil, err
+	}
 
 	// Canonical app-state blob by zk_id (same discipline as store_circuit).
 	if err := k.mustStoreCircuitBytes(sdkCtx, uint64(zkIDUint32), vkCode); err != nil {
@@ -409,12 +417,8 @@ func (k Keeper) store_vk_param(
 	}
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 	defaultAccessConfig := k.getInstantiateAccessConfig(sdkCtx).With(creator)
-	chainConfigs := types.ChainAccessConfigs{
-		Instantiate: defaultAccessConfig,
-		Upload:      k.getCircuitUploadAccessConfig(sdkCtx),
-	}
-	if !authZ.CanCreateCode(chainConfigs, creator, defaultAccessConfig) {
-		return 0, nil, errorsmod.Wrap(sdkerrors.ErrUnauthorized, "can not store vk params")
+	if err := k.authorizeCircuitUpload(sdkCtx, creator, &defaultAccessConfig, authZ); err != nil {
+		return 0, nil, errorsmod.Wrap(err, "can not store vk params")
 	}
 
 	if ioutils.IsGzip(paramBytes) {
@@ -496,12 +500,8 @@ func (k Keeper) store_circuit(
 	if instantiateAccess == nil {
 		instantiateAccess = &defaultAccessConfig
 	}
-	chainConfigs := types.ChainAccessConfigs{
-		Instantiate: defaultAccessConfig,
-		Upload:      k.getCircuitUploadAccessConfig(sdkCtx),
-	}
-	if !authZ.CanCreateCode(chainConfigs, creator, *instantiateAccess) {
-		return 0, checksum, errorsmod.Wrap(sdkerrors.ErrUnauthorized, "can not create circuit")
+	if err := k.authorizeCircuitUpload(sdkCtx, creator, instantiateAccess, authZ); err != nil {
+		return 0, checksum, errorsmod.Wrap(err, "can not create circuit")
 	}
 
 	paramInfo := k.GetVkParamInfo(sdkCtx, paramID)
@@ -582,6 +582,9 @@ func (k Keeper) store_circuit(
 	)
 	k.mustStoreCircuitInfo(sdkCtx, zkID, zkInfo)
 	k.mustStoreCircuitParamRef(sdkCtx, zkID, paramID)
+	if err := k.setCircuitCreatorIndex(sdkCtx, creator, zkID); err != nil {
+		return 0, checksum, err
+	}
 	// Canonical app-state blob for genesis / state sync / cold-path WasmQuery::Circuit.
 	// Hot path never reads this — Path A uses CircuitHash + wasmvm cache only.
 	if err := k.mustStoreCircuitBytes(sdkCtx, zkID, circuitBinary); err != nil {
@@ -634,6 +637,112 @@ func (k Keeper) store_full_circuit(
 		sdk.NewAttribute(types.AttributeKeyCircuitChecksum, hex.EncodeToString(circuitChecksum)),
 	))
 	return paramID, zkID, paramChecksum, circuitChecksum, nil
+}
+
+// authorizeCircuitUpload is CircuitUploadAccess OR an unexpired depositee row.
+// Gov / Everybody / allowlisted addresses skip payment.
+func (k Keeper) authorizeCircuitUpload(ctx sdk.Context, creator sdk.AccAddress, instantiateAccess *types.AccessConfig, authZ types.AuthorizationPolicy) error {
+	defaultAccessConfig := k.getInstantiateAccessConfig(ctx).With(creator)
+	if instantiateAccess == nil {
+		instantiateAccess = &defaultAccessConfig
+	}
+	chainConfigs := types.ChainAccessConfigs{
+		Instantiate: defaultAccessConfig,
+		Upload:      k.getCircuitUploadAccessConfig(ctx),
+	}
+	if authZ.CanCreateCode(chainConfigs, creator, *instantiateAccess) {
+		return nil
+	}
+	if !instantiateAccess.IsSubset(defaultAccessConfig) {
+		return sdkerrors.ErrUnauthorized
+	}
+	if k.HasCircuitDeposit(ctx, creator) {
+		return nil
+	}
+	return types.ErrCircuitDepositRequired
+}
+
+func (k Keeper) HasCircuitDeposit(ctx context.Context, addr sdk.AccAddress) bool {
+	until, err := k.circuitDepositees.Get(ctx, addr)
+	if err != nil {
+		return false
+	}
+	now := sdk.UnwrapSDKContext(ctx).BlockTime().Unix()
+	if now < 0 {
+		now = 0
+	}
+	return int64(until) > now
+}
+
+var _ types.CircuitDepositQueryServer = (*Keeper)(nil)
+
+func (k Keeper) Deposit(goCtx context.Context, req *types.QueryCircuitDepositRequest) (*types.QueryCircuitDepositResponse, error) {
+	if req == nil || req.Address == "" {
+		return nil, sdkerrors.ErrInvalidAddress
+	}
+	addr, err := sdk.AccAddressFromBech32(req.Address)
+	if err != nil {
+		return nil, err
+	}
+	until, ok := k.CircuitDepositPaidUntil(goCtx, addr)
+	covered := k.HasCircuitDeposit(goCtx, addr)
+	if !ok {
+		until = 0
+	}
+	return &types.QueryCircuitDepositResponse{
+		Address:       req.Address,
+		PaidUntilUnix: int64(until),
+		Covered:       covered,
+	}, nil
+}
+
+func (k Keeper) CircuitDepositPaidUntil(ctx context.Context, addr sdk.AccAddress) (uint64, bool) {
+	until, err := k.circuitDepositees.Get(ctx, addr)
+	if err != nil {
+		return 0, false
+	}
+	return until, true
+}
+
+func (k Keeper) PayCircuitDeposit(ctx context.Context, payer sdk.AccAddress, years uint32) (int64, error) {
+	if years == 0 || years > types.CircuitDepositMaxYears {
+		return 0, types.ErrLimit.Wrapf("years must be 1..%d", types.CircuitDepositMaxYears)
+	}
+	fee := k.circuitDepositYearly
+	if !fee.IsPositive() {
+		fee = sdk.NewInt64Coin(sdk.DefaultBondDenom, types.CircuitDepositYearlyAmount)
+	}
+	amt := sdk.NewCoins(sdk.NewCoin(fee.Denom, fee.Amount.MulRaw(int64(years))))
+	if err := k.receiveCircuitRunwayPayment(ctx, payer, amt); err != nil {
+		return 0, err
+	}
+	sdkCtx := sdk.UnwrapSDKContext(ctx)
+	now := sdkCtx.BlockTime().Unix()
+	if now < 0 {
+		now = 0
+	}
+	start := uint64(now)
+	if existing, err := k.circuitDepositees.Get(ctx, payer); err == nil {
+		k.deleteCircuitDepositExpiry(ctx, existing, payer)
+		if existing > start {
+			start = existing
+		}
+	}
+	until := start + uint64(years)*uint64(types.CircuitDepositSecondsPerYear)
+	if err := k.circuitDepositees.Set(ctx, payer, until); err != nil {
+		return 0, err
+	}
+	if err := k.setCircuitDepositExpiry(ctx, until, payer); err != nil {
+		return 0, err
+	}
+	k.deleteCircuitDepositGC(ctx, payer)
+	sdkCtx.EventManager().EmitEvent(sdk.NewEvent(
+		"pay_circuit_deposit",
+		sdk.NewAttribute("payer", payer.String()),
+		sdk.NewAttribute("years", strconv.FormatUint(uint64(years), 10)),
+		sdk.NewAttribute("paid_until_unix", strconv.FormatUint(until, 10)),
+	))
+	return int64(until), nil
 }
 
 func (k Keeper) getCircuitUploadAccessConfig(ctx context.Context) types.AccessConfig {
@@ -724,6 +833,9 @@ func (k Keeper) removeCircuit(ctx context.Context, zkID uint64) error {
 		}
 	}
 
+	if creator, err := sdk.AccAddressFromBech32(zkInfo.Creator); err == nil {
+		k.deleteCircuitCreatorIndex(ctx, creator, zkID)
+	}
 	if err := store.Delete(types.GetCircuitKey(zkID)); err != nil {
 		return err
 	}
@@ -2189,7 +2301,6 @@ func (k Keeper) IsPinnedCircuit(ctx context.Context, zkID uint64) bool {
 	}
 	return ok
 }
-
 
 // collectPinnedChecksums collects checksums for all pinned codes, optionally excluding one
 func (k Keeper) collectPinnedChecksums(ctx context.Context, excludeCodeID *uint64) ([]wasmvm.Checksum, error) {

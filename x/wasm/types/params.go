@@ -88,7 +88,9 @@ func DefaultParams() Params {
 	return Params{
 		CodeUploadAccess:             AllowEverybody,
 		InstantiateDefaultPermission: AccessTypeEverybody,
-		CircuitUploadAccess:          AllowEverybody,
+		// Allowlisted / Everybody / gov skip payment. Others need an unexpired
+		// circuit_depositees row (MsgPayCircuitDeposit).
+		CircuitUploadAccess: AllowEverybody,
 	}
 }
 
