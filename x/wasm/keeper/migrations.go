@@ -28,6 +28,9 @@ func (m Migrator) Migrate1to2(ctx sdk.Context) error {
 // Migrate2to3 migrates the x/wasm module state from the consensus
 // version 2 to version 3.
 func (m Migrator) Migrate2to3(ctx sdk.Context) error {
+	if m.legacySubspace == nil {
+		return nil
+	}
 	return v2.MigrateStore(ctx, m.keeper.storeService, m.legacySubspace, m.keeper.cdc)
 }
 

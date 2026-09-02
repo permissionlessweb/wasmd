@@ -27,7 +27,6 @@ import (
 	simtypes "github.com/cosmos/cosmos-sdk/types/simulation"
 
 	"github.com/CosmWasm/wasmd/x/wasm/client/cli"
-	"github.com/CosmWasm/wasmd/x/wasm/exported"
 	"github.com/CosmWasm/wasmd/x/wasm/keeper"
 	"github.com/CosmWasm/wasmd/x/wasm/simulation"
 	"github.com/CosmWasm/wasmd/x/wasm/types"
@@ -112,9 +111,7 @@ type AppModule struct {
 	validatorSetSource keeper.ValidatorSetSource
 	accountKeeper      types.AccountKeeper // for simulation
 	bankKeeper         simulation.BankKeeper
-	router             keeper.MessageRouter
-	// legacySubspace is used solely for migration of x/params managed parameters
-	legacySubspace exported.Subspace
+	router keeper.MessageRouter
 }
 
 // NewAppModule creates a new AppModule object
@@ -125,7 +122,6 @@ func NewAppModule(
 	ak types.AccountKeeper,
 	bk simulation.BankKeeper,
 	router *baseapp.MsgServiceRouter,
-	ss exported.Subspace,
 ) AppModule {
 	return AppModule{
 		AppModuleBasic:     AppModuleBasic{},
@@ -135,7 +131,6 @@ func NewAppModule(
 		accountKeeper:      ak,
 		bankKeeper:         bk,
 		router:             router,
-		legacySubspace:     ss,
 	}
 }
 
@@ -166,7 +161,7 @@ func (am AppModule) RegisterServices(cfg module.Configurator) {
 	// CircuitDeposit msg/query services are handmade (not in tx.proto / query.proto).
 	// Registering them on SDK routers panics: no method descriptor.
 
-	m := keeper.NewMigrator(*am.keeper, am.legacySubspace)
+	m := keeper.NewMigrator(*am.keeper, nil)
 	err := cfg.RegisterMigration(types.ModuleName, 1, m.Migrate1to2)
 	if err != nil {
 		panic(err)

@@ -15,7 +15,6 @@ import (
 	errorsmod "cosmossdk.io/errors"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	paramtypes "github.com/cosmos/cosmos-sdk/x/params/types"
 
 	"github.com/CosmWasm/wasmd/x/wasm/types"
 )
@@ -25,17 +24,11 @@ var (
 	ParamStoreKeyInstantiateAccess = []byte("instantiateAccess")
 )
 
-// Deprecated: Type declaration for parameters
-func ParamKeyTable() paramtypes.KeyTable {
-	return paramtypes.NewKeyTable().RegisterParamSet(&Params{})
-}
-
-// ParamSetPairs returns the parameter set pairs.
-func (p *Params) ParamSetPairs() paramtypes.ParamSetPairs {
-	return paramtypes.ParamSetPairs{
-		paramtypes.NewParamSetPair(ParamStoreKeyUploadAccess, &p.CodeUploadAccess, validateAccessConfig),
-		paramtypes.NewParamSetPair(ParamStoreKeyInstantiateAccess, &p.InstantiateDefaultPermission, validateAccessType),
+func (p Params) Validate() error {
+	if err := validateAccessConfig(p.CodeUploadAccess); err != nil {
+		return err
 	}
+	return validateAccessType(p.InstantiateDefaultPermission)
 }
 
 func validateAccessConfig(i any) error {

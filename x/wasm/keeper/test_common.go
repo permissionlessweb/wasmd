@@ -58,9 +58,6 @@ import (
 	govv1 "github.com/cosmos/cosmos-sdk/x/gov/types/v1"
 	"github.com/cosmos/cosmos-sdk/x/mint"
 	minttypes "github.com/cosmos/cosmos-sdk/x/mint/types"
-	"github.com/cosmos/cosmos-sdk/x/params"
-	paramsclient "github.com/cosmos/cosmos-sdk/x/params/client"
-	paramstypes "github.com/cosmos/cosmos-sdk/x/params/types"
 	"github.com/cosmos/cosmos-sdk/x/slashing"
 	slashingtypes "github.com/cosmos/cosmos-sdk/x/slashing/types"
 	"github.com/cosmos/cosmos-sdk/x/staking"
@@ -81,10 +78,7 @@ var moduleBasics = module.NewBasicManager(
 	staking.AppModuleBasic{},
 	mint.AppModuleBasic{},
 	distribution.AppModuleBasic{},
-	gov.NewAppModuleBasic([]govclient.ProposalHandler{
-		paramsclient.ProposalHandler,
-	}),
-	params.AppModuleBasic{},
+	gov.NewAppModuleBasic([]govclient.ProposalHandler{}),
 	slashing.AppModuleBasic{},
 	ibc.AppModuleBasic{},
 	upgrade.AppModuleBasic{},
@@ -219,7 +213,7 @@ func createTestInput(
 	keys := storetypes.NewKVStoreKeys(
 		authtypes.StoreKey, banktypes.StoreKey, stakingtypes.StoreKey,
 		minttypes.StoreKey, distributiontypes.StoreKey, slashingtypes.StoreKey,
-		govtypes.StoreKey, paramstypes.StoreKey, ibcexported.StoreKey, upgradetypes.StoreKey,
+		govtypes.StoreKey, ibcexported.StoreKey, upgradetypes.StoreKey,
 		evidencetypes.StoreKey, ibctransfertypes.StoreKey,
 		feegrant.StoreKey, authzkeeper.StoreKey,
 		types.StoreKey,
@@ -229,7 +223,7 @@ func createTestInput(
 	for _, v := range keys {
 		ms.MountStoreWithDB(v, storetypes.StoreTypeIAVL, db)
 	}
-	tkeys := storetypes.NewTransientStoreKeys(paramstypes.TStoreKey)
+	tkeys := storetypes.NewTransientStoreKeys()
 	for _, v := range tkeys {
 		ms.MountStoreWithDB(v, storetypes.StoreTypeTransient, db)
 	}
@@ -378,10 +372,10 @@ func createTestInput(
 	require.NoError(t, govKeeper.Params.Set(ctx, govv1.DefaultParams()))
 
 	am := module.NewManager( // minimal module set that we use for message/ query tests
-		bank.NewAppModule(appCodec, bankKeeper, accountKeeper, nil),
-		staking.NewAppModule(appCodec, stakingKeeper, accountKeeper, bankKeeper, nil),
-		distribution.NewAppModule(appCodec, distKeeper, accountKeeper, bankKeeper, stakingKeeper, nil),
-		gov.NewAppModule(appCodec, govKeeper, accountKeeper, bankKeeper, nil),
+		bank.NewAppModule(appCodec, bankKeeper, accountKeeper),
+		staking.NewAppModule(appCodec, stakingKeeper, accountKeeper, bankKeeper),
+		distribution.NewAppModule(appCodec, distKeeper, accountKeeper, bankKeeper, stakingKeeper),
+		gov.NewAppModule(appCodec, govKeeper, accountKeeper, bankKeeper),
 	)
 	am.RegisterServices(module.NewConfigurator(appCodec, msgRouter, querier)) //nolint:errcheck
 	types.RegisterMsgServer(msgRouter, NewMsgServerImpl(&keeper))
