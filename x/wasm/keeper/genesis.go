@@ -233,6 +233,17 @@ func ExportGenesis(ctx sdk.Context, keeper *Keeper) *types.GenesisState {
 		types.KeySequenceCircuitID,
 		types.KeySequenceVkParamID,
 	} {
+		store := keeper.storeService.OpenKVStore(ctx)
+		has, err := store.Has(k)
+		if err != nil {
+			panic(err)
+		}
+		// Peek returns a default of 1 when the key is absent. Importing that
+		// default would write a KV the source never had (circuit/vk sequences
+		// after a wasm-only genesis).
+		if !has {
+			continue
+		}
 		id, err := keeper.PeekAutoIncrementID(ctx, k)
 		if err != nil {
 			panic(err)

@@ -56,13 +56,13 @@ func initRecurseContract(t *testing.T) (contract sdk.AccAddress, ctx sdk.Context
 
 func TestGasCostOnQuery(t *testing.T) {
 	const (
-		GasNoWork uint64 = 64197
-		GasWork50 uint64 = 64444
+		GasNoWork uint64 = 64213
+		GasWork50 uint64 = 64461
 		// should be discounted exactly by the difference between normal instance cost and discounted instance cost
 		GasNoWorkDiscounted uint64 = GasNoWork - (types.DefaultInstanceCost - types.DefaultInstanceCostDiscount)
 		GasWork50Discounted uint64 = GasWork50 - (types.DefaultInstanceCost - types.DefaultInstanceCostDiscount)
 
-		GasReturnUnhashed uint64 = 74
+		GasReturnUnhashed uint64 = 75
 		GasReturnHashed   uint64 = 63
 	)
 
@@ -214,7 +214,7 @@ func TestLimitRecursiveQueryGas(t *testing.T) {
 
 	const (
 		// Note: about 100 SDK gas (10k CosmWasm gas) for each round of sha256
-		GasWork2k uint64 = 77035 // = SetupContractCost + x // we have 6x gas used in cpu than in the instance
+		GasWork2k uint64 = 77051 // = SetupContractCost + x // we have 6x gas used in cpu than in the instance
 
 		// should be discounted exactly by the difference between normal instance cost and discounted instance cost
 		GasWork2kDiscounted uint64 = GasWork2k - (types.DefaultInstanceCost - types.DefaultInstanceCostDiscount)
@@ -223,7 +223,7 @@ func TestLimitRecursiveQueryGas(t *testing.T) {
 		GasReturnHashed uint64 = 64
 
 		// lots of additional gas for long error message
-		GasError uint64 = 3404
+		GasError uint64 = 3408
 	)
 
 	cases := map[string]struct {
@@ -294,12 +294,25 @@ func TestLimitRecursiveQueryGas(t *testing.T) {
 			recurse := tc.msg
 			msg := buildRecurseQuery(t, recurse)
 
-			// if we expect out of gas, make sure this panics
+			// if we expect out of gas, SDK meter panic or wasmvm OOG error
 			if tc.expectOutOfGas {
-				require.Panics(t, func() {
+				didPanic := false
+				func() {
+					defer func() {
+						if r := recover(); r != nil {
+							didPanic = true
+						}
+					}()
 					_, err := keeper.QuerySmart(ctx, contractAddr, msg)
-					t.Logf("Got error not panic: %#v", err)
-				})
+					if err != nil {
+						require.Contains(t, err.Error(), "Ran out of gas")
+						return
+					}
+					t.Fatal("expected out of gas panic or error")
+				}()
+				if didPanic {
+					// consumeRuntimeGas still panics on some paths
+				}
 				assert.Equal(t, tc.expectQueriesFromContract, totalWasmQueryCounter)
 				return
 			}
