@@ -48,6 +48,9 @@ type MsgPayCircuitDeposit struct {
 func (m *MsgPayCircuitDeposit) Reset()         { *m = MsgPayCircuitDeposit{} }
 func (m *MsgPayCircuitDeposit) String() string { return proto.CompactTextString(m) }
 func (*MsgPayCircuitDeposit) ProtoMessage()    {}
+func (*MsgPayCircuitDeposit) Descriptor() ([]byte, []int) {
+	return fileDescriptor_4f74d82755520264, []int{48}
+}
 func (m *MsgPayCircuitDeposit) ValidateBasic() error {
 	if _, err := sdk.AccAddressFromBech32(m.Sender); err != nil {
 		return sdkerrors.ErrInvalidAddress.Wrap("sender")
@@ -69,6 +72,9 @@ type MsgPayCircuitDepositResponse struct {
 func (m *MsgPayCircuitDepositResponse) Reset()         { *m = MsgPayCircuitDepositResponse{} }
 func (m *MsgPayCircuitDepositResponse) String() string { return proto.CompactTextString(m) }
 func (*MsgPayCircuitDepositResponse) ProtoMessage()    {}
+func (*MsgPayCircuitDepositResponse) Descriptor() ([]byte, []int) {
+	return fileDescriptor_4f74d82755520264, []int{49}
+}
 
 // SplitCircuitRunway is a 50/50 split. Odd leftover uterp goes to the dev/maintenance pool.
 func SplitCircuitRunway(amt sdk.Coins) (valPool, devPool sdk.Coins) {
