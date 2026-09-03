@@ -27,6 +27,26 @@ func TestPayCircuitDepositSplitsPools(t *testing.T) {
 	require.Equal(t, int64(500_000), keepers.BankKeeper.GetBalance(ctx, devPool, "stake").Amount.Int64())
 }
 
+func TestPayCircuitDepositDevDestinationAccount(t *testing.T) {
+	ctx, keepers := CreateDefaultTestInput(t)
+	k := keepers.WasmKeeper
+	dao := RandomAccountAddress(t)
+	params := k.GetParams(ctx)
+	params.CircuitDevDestination = dao.String()
+	require.NoError(t, k.SetParams(ctx, params))
+
+	payer := RandomAccountAddress(t)
+	keepers.Faucet.Fund(ctx, payer, sdk.NewInt64Coin("stake", 2_000_000))
+	_, err := k.PayCircuitDeposit(ctx, payer, 1)
+	require.NoError(t, err)
+
+	valPool := authtypes.NewModuleAddress(types.CircuitValPoolName)
+	devPool := authtypes.NewModuleAddress(types.CircuitDevPoolName)
+	require.Equal(t, int64(500_000), keepers.BankKeeper.GetBalance(ctx, valPool, "stake").Amount.Int64())
+	require.Equal(t, int64(0), keepers.BankKeeper.GetBalance(ctx, devPool, "stake").Amount.Int64())
+	require.Equal(t, int64(500_000), keepers.BankKeeper.GetBalance(ctx, dao, "stake").Amount.Int64())
+}
+
 func TestQueryCircuitDeposit(t *testing.T) {
 	ctx, keepers := CreateDefaultTestInput(t)
 	k := keepers.WasmKeeper

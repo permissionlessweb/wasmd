@@ -143,7 +143,7 @@ func (am AppModule) IsAppModule() { // marker
 }
 
 func (am AppModule) EndBlock(ctx context.Context) error {
-	am.keeper.DistributeCircuitValPool(ctx)
+	am.keeper.TickCircuitEpoch(ctx)
 	am.keeper.PruneExpiredCircuitDeposits(ctx)
 	return nil
 }
@@ -152,7 +152,7 @@ func (am AppModule) EndBlock(ctx context.Context) error {
 // module. It should be incremented on each consensus-breaking change
 // introduced by the module. To avoid wrong/empty versions, the initial version
 // should be set to 1.
-func (AppModule) ConsensusVersion() uint64 { return 4 }
+func (AppModule) ConsensusVersion() uint64 { return 5 }
 
 func (am AppModule) RegisterServices(cfg module.Configurator) {
 	msgServer := keeper.NewMsgServerImpl(am.keeper)

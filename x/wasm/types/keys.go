@@ -64,6 +64,8 @@ var (
 	CircuitDepositGCPrefix = []byte{0x1C}
 	// CircuitByCreatorIDPrefix maps creator → zk_id for bounded GC (not the unused 0x18 layout).
 	CircuitByCreatorIDPrefix = []byte{0x1D}
+	// CircuitEpochInfoPrefix is Osmosis-shaped EpochInfo JSON for circuit val-pool settle.
+	CircuitEpochInfoPrefix = []byte{0x1E}
 
 	KeySequenceCircuitID  = append(SequenceKeyPrefix, []byte("lastPlonkishCircuit")...)
 	KeySequenceVkParamID  = append(SequenceKeyPrefix, []byte("lastVkParamId")...)

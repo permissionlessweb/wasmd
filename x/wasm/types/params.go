@@ -113,6 +113,11 @@ func (p Params) ValidateBasic() error {
 	if err := p.CodeUploadAccess.ValidateBasic(); err != nil {
 		return errors.Wrap(err, "upload access")
 	}
+	if p.CircuitDevDestination != "" {
+		if _, err := sdk.AccAddressFromBech32(p.CircuitDevDestination); err != nil {
+			return errors.Wrap(err, "circuit_dev_destination")
+		}
+	}
 	return nil
 }
 

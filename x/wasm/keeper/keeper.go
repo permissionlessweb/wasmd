@@ -31,6 +31,7 @@ import (
 	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	vestingexported "github.com/cosmos/cosmos-sdk/x/auth/vesting/exported"
+	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 
 	"github.com/CosmWasm/wasmd/x/wasm/ioutils"
 	"github.com/CosmWasm/wasmd/x/wasm/types"
@@ -107,6 +108,9 @@ type Keeper struct {
 	circuitDepositYearly sdk.Coin
 	bankKeeper           types.BankKeeper
 	stakingKeeper        types.StakingKeeper
+	// circuitWeight, if set, returns participation weight for a bonded validator
+	// at settle (0 = skip / reallocate). nil => 1 if !Jailed else 0.
+	circuitWeight func(ctx context.Context, v stakingtypes.Validator) int64
 	// propagate gov authZ to sub-messages
 	propagateGovAuthorization map[types.AuthorizationPolicyAction]struct{}
 

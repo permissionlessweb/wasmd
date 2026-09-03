@@ -178,6 +178,7 @@ type Params struct {
 	CodeUploadAccess             AccessConfig `protobuf:"bytes,1,opt,name=code_upload_access,json=codeUploadAccess,proto3" json:"code_upload_access" yaml:"code_upload_access"`
 	InstantiateDefaultPermission AccessType   `protobuf:"varint,2,opt,name=instantiate_default_permission,json=instantiateDefaultPermission,proto3,enum=cosmwasm.wasm.v1.AccessType" json:"instantiate_default_permission,omitempty" yaml:"instantiate_default_permission"`
 	CircuitUploadAccess          AccessConfig `protobuf:"bytes,3,opt,name=circuit_upload_access,json=circuitUploadAccess,proto3" json:"circuit_upload_access" yaml:"circuit_upload_access"`
+	CircuitDevDestination        string       `protobuf:"bytes,4,opt,name=circuit_dev_destination,json=circuitDevDestination,proto3" json:"circuit_dev_destination,omitempty" yaml:"circuit_dev_destination"`
 }
 
 func (m *Params) Reset()      { *m = Params{} }
@@ -672,6 +673,9 @@ func (this *Params) Equal(that interface{}) bool {
 	if !this.CircuitUploadAccess.Equal(&that1.CircuitUploadAccess) {
 		return false
 	}
+	if this.CircuitDevDestination != that1.CircuitDevDestination {
+		return false
+	}
 	return true
 }
 func (this *CircuitInfo) Equal(that interface{}) bool {
@@ -963,6 +967,13 @@ func (m *Params) MarshalToSizedBuffer(dAtA []byte) (int, error) {
 	_ = i
 	var l int
 	_ = l
+	if len(m.CircuitDevDestination) > 0 {
+		i -= len(m.CircuitDevDestination)
+		copy(dAtA[i:], m.CircuitDevDestination)
+		i = encodeVarintTypes(dAtA, i, uint64(len(m.CircuitDevDestination)))
+		i--
+		dAtA[i] = 0x22
+	}
 	{
 		size, err := m.CircuitUploadAccess.MarshalToSizedBuffer(dAtA[:i])
 		if err != nil {
@@ -1368,6 +1379,10 @@ func (m *Params) Size() (n int) {
 	}
 	l = m.CircuitUploadAccess.Size()
 	n += 1 + l + sovTypes(uint64(l))
+	l = len(m.CircuitDevDestination)
+	if l > 0 {
+		n += 1 + l + sovTypes(uint64(l))
+	}
 	return n
 }
 
@@ -1805,6 +1820,38 @@ func (m *Params) Unmarshal(dAtA []byte) error {
 			if err := m.CircuitUploadAccess.Unmarshal(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
+			iNdEx = postIndex
+		case 4:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field CircuitDevDestination", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflowTypes
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLengthTypes
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLengthTypes
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.CircuitDevDestination = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

@@ -64,6 +64,12 @@ message Params {
     (amino.dont_omitempty) = true,
     (gogoproto.moretags) = "yaml:\"circuit_upload_access\""
   ];
+  // circuit_dev_destination is the 50% maintenance share. Empty = module
+  // account circuit_dev_pool. Else a bech32 account (wallet or contract DAO).
+  string circuit_dev_destination = 4 [
+    (cosmos_proto.scalar) = "cosmos.AddressString",
+    (gogoproto.moretags) = "yaml:\"circuit_dev_destination\""
+  ];
 }
 
 // CircuitInfo is metadata for an uploaded circuit (params + cs + vk).

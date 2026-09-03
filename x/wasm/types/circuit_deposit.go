@@ -20,6 +20,10 @@ const (
 	// Circuit runway payment split (not stake-weighted).
 	CircuitValPoolName = "circuit_val_pool"
 	CircuitDevPoolName = "circuit_dev_pool"
+	// CircuitDistrEpochDay is the Osmosis-style identifier wasm filters on AfterEpochEnd.
+	CircuitDistrEpochDay = "day"
+	// CircuitEpochDurationDefault is 24h until x/epochs is mounted.
+	CircuitEpochDurationDefault = int64(24 * 3600)
 )
 
 var (
