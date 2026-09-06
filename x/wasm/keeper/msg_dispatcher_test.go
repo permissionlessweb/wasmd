@@ -18,6 +18,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 
 	"github.com/CosmWasm/wasmd/x/wasm/keeper/wasmtesting"
+	"github.com/CosmWasm/wasmd/x/wasm/types"
 )
 
 func TestDispatchSubmessages(t *testing.T) {
@@ -310,16 +311,12 @@ func TestDispatchSubmessages(t *testing.T) {
 					}
 					res := reply.Result.Ok
 
-					// ensure the input events are what we expect
-					// I didn't use require.Equal() to act more like a contract... but maybe that would be better
-					if len(res.Events) != 2 {
+					// reply payload is wasm / wasm-* only (execute is emitted to indexers, not the contract)
+					if len(res.Events) != 1 {
 						return nil, fmt.Errorf("event count: %#v", res.Events)
 					}
-					if res.Events[0].Type != "execute" {
+					if res.Events[0].Type != "wasm" {
 						return nil, fmt.Errorf("event0: %#v", res.Events[0])
-					}
-					if res.Events[1].Type != "wasm" {
-						return nil, fmt.Errorf("event1: %#v", res.Events[1])
 					}
 
 					// let's add a custom event here and see if it makes it out
@@ -372,6 +369,67 @@ func TestDispatchSubmessages(t *testing.T) {
 				},
 			},
 			expCommits: []bool{true},
+		},
+		"wasm reply excludes bank and system events from payload": {
+			msgs: []wasmvmtypes.SubMsg{{ID: 1, ReplyOn: wasmvmtypes.ReplyAlways, Msg: wasmvmtypes.CosmosMsg{Wasm: &wasmvmtypes.WasmMsg{}}}},
+			replyer: &mockReplyer{
+				replyFn: func(ctx sdk.Context, contractAddress sdk.AccAddress, reply wasmvmtypes.Reply) ([]byte, error) {
+					if reply.Result.Err != "" {
+						return nil, errors.New(reply.Result.Err)
+					}
+					res := reply.Result.Ok
+					if len(res.Events) != 2 {
+						return nil, fmt.Errorf("event count: %#v", res.Events)
+					}
+					if res.Events[0].Type != types.WasmModuleEventType {
+						return nil, fmt.Errorf("event0: %#v", res.Events[0])
+					}
+					if res.Events[1].Type != types.CustomContractEventPrefix+"custom" {
+						return nil, fmt.Errorf("event1: %#v", res.Events[1])
+					}
+					for _, ev := range res.Events {
+						if ev.Type == "transfer" || ev.Type == types.EventTypeExecute ||
+							ev.Type == types.EventTypeInstantiate || ev.Type == types.EventTypeSudo ||
+							ev.Type == types.EventTypeReply {
+							return nil, fmt.Errorf("native/system event leaked into reply: %#v", ev)
+						}
+					}
+					return res.Data, nil
+				},
+			},
+			msgHandler: &wasmtesting.MockMessageHandler{
+				DispatchMsgFn: func(ctx sdk.Context, contractAddr sdk.AccAddress, contractIBCPortID string, msg wasmvmtypes.CosmosMsg) (events []sdk.Event, data [][]byte, msgResponses [][]*codectypes.Any, err error) {
+					ctx.EventManager().EmitEvent(sdk.NewEvent("transfer",
+						sdk.NewAttribute("recipient", "cosmos1bankrecipient"),
+						sdk.NewAttribute("sender", "cosmos1banksender"),
+						sdk.NewAttribute("amount", "1utoken"),
+					))
+					events = []sdk.Event{
+						sdk.NewEvent(types.EventTypeExecute, sdk.NewAttribute("_contract_address", "placeholder-random-addr")),
+						sdk.NewEvent(types.EventTypeInstantiate, sdk.NewAttribute("_contract_address", "placeholder-random-addr")),
+						sdk.NewEvent(types.EventTypeSudo, sdk.NewAttribute("_contract_address", "placeholder-random-addr")),
+						sdk.NewEvent(types.EventTypeReply, sdk.NewAttribute("_contract_address", "placeholder-random-addr")),
+						sdk.NewEvent(types.WasmModuleEventType, sdk.NewAttribute("random", "data")),
+						sdk.NewEvent(types.CustomContractEventPrefix+"custom", sdk.NewAttribute("foo", "bar")),
+					}
+					return events, [][]byte{[]byte("subData")}, [][]*codectypes.Any{}, nil
+				},
+			},
+			expData:    []byte("subData"),
+			expCommits: []bool{true},
+			expEvents: []sdk.Event{
+				sdk.NewEvent("transfer",
+					sdk.NewAttribute("recipient", "cosmos1bankrecipient"),
+					sdk.NewAttribute("sender", "cosmos1banksender"),
+					sdk.NewAttribute("amount", "1utoken"),
+				),
+				sdk.NewEvent(types.EventTypeExecute, sdk.NewAttribute("_contract_address", "placeholder-random-addr")),
+				sdk.NewEvent(types.EventTypeInstantiate, sdk.NewAttribute("_contract_address", "placeholder-random-addr")),
+				sdk.NewEvent(types.EventTypeSudo, sdk.NewAttribute("_contract_address", "placeholder-random-addr")),
+				sdk.NewEvent(types.EventTypeReply, sdk.NewAttribute("_contract_address", "placeholder-random-addr")),
+				sdk.NewEvent(types.WasmModuleEventType, sdk.NewAttribute("random", "data")),
+				sdk.NewEvent(types.CustomContractEventPrefix+"custom", sdk.NewAttribute("foo", "bar")),
+			},
 		},
 		"non-wasm reply events get filtered": {
 			// show events from a stargate message gets filtered out
@@ -446,6 +504,90 @@ func TestDispatchSubmessages(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDispatchSubmessagesReplyCostsIndependentOfBankEvents(t *testing.T) {
+	bankEvent := sdk.NewEvent("transfer",
+		sdk.NewAttribute("recipient", "cosmos1bankrecipientxxxxxxxxxxxxxxxxxxxxxxxx"),
+		sdk.NewAttribute("sender", "cosmos1banksenderxxxxxxxxxxxxxxxxxxxxxxxxxx"),
+		sdk.NewAttribute("amount", "1000000000000000000utoken"),
+	)
+	wasmEvent := sdk.NewEvent(types.WasmModuleEventType, sdk.NewAttribute("random", "data"))
+
+	dispatch := func(emitBank bool) (sdk.Events, wasmvmtypes.Reply) {
+		t.Helper()
+		var captured wasmvmtypes.Reply
+		replyer := &mockReplyer{
+			replyFn: func(ctx sdk.Context, contractAddress sdk.AccAddress, reply wasmvmtypes.Reply) ([]byte, error) {
+				captured = reply
+				return []byte("myReplyData"), nil
+			},
+		}
+		msgHandler := &wasmtesting.MockMessageHandler{
+			DispatchMsgFn: func(ctx sdk.Context, contractAddr sdk.AccAddress, contractIBCPortID string, msg wasmvmtypes.CosmosMsg) (events []sdk.Event, data [][]byte, msgResponses [][]*codectypes.Any, err error) {
+				if emitBank {
+					ctx.EventManager().EmitEvent(bankEvent)
+				}
+				return []sdk.Event{wasmEvent}, [][]byte{[]byte("subData")}, [][]*codectypes.Any{}, nil
+			},
+		}
+		em := sdk.NewEventManager()
+		var mockStore wasmtesting.MockCommitMultiStore
+		ctx := sdk.Context{}.WithMultiStore(&mockStore).
+			WithGasMeter(storetypes.NewGasMeter(100)).
+			WithEventManager(em).WithLogger(log.NewTestLogger(t))
+		d := NewMessageDispatcher(msgHandler, replyer)
+		msgs := []wasmvmtypes.SubMsg{{
+			ID:      1,
+			ReplyOn: wasmvmtypes.ReplyAlways,
+			Msg:     wasmvmtypes.CosmosMsg{Wasm: &wasmvmtypes.WasmMsg{}},
+		}}
+		gotData, err := d.DispatchSubmessages(ctx, RandomAccountAddress(t), "any_port", msgs)
+		require.NoError(t, err)
+		assert.Equal(t, []byte("myReplyData"), gotData)
+		require.NotNil(t, captured.Result.Ok)
+		return em.Events(), captured
+	}
+
+	emittedWithBank, replyWithBank := dispatch(true)
+	emittedWithoutBank, replyWithoutBank := dispatch(false)
+
+	require.Len(t, replyWithBank.Result.Ok.Events, 1)
+	assert.Equal(t, types.WasmModuleEventType, replyWithBank.Result.Ok.Events[0].Type)
+	for _, ev := range replyWithBank.Result.Ok.Events {
+		assert.NotEqual(t, "transfer", ev.Type)
+	}
+	assert.Equal(t, replyWithoutBank.Result.Ok.Events, replyWithBank.Result.Ok.Events)
+
+	require.GreaterOrEqual(t, len(emittedWithBank), 2)
+	assert.Equal(t, "transfer", emittedWithBank[0].Type)
+	assert.Equal(t, types.WasmModuleEventType, emittedWithBank[1].Type)
+	for _, ev := range emittedWithoutBank {
+		assert.NotEqual(t, "transfer", ev.Type)
+	}
+
+	gasReg := types.NewDefaultWasmGasRegister()
+	assert.Equal(t, gasReg.ReplyCosts(true, replyWithoutBank), gasReg.ReplyCosts(true, replyWithBank))
+
+	inflated := wasmvmtypes.Reply{
+		ID:      replyWithBank.ID,
+		Payload: replyWithBank.Payload,
+		Result: wasmvmtypes.SubMsgResult{
+			Ok: &wasmvmtypes.SubMsgResponse{
+				Events: append(append([]wasmvmtypes.Event(nil), replyWithBank.Result.Ok.Events...), wasmvmtypes.Event{
+					Type: "transfer",
+					Attributes: []wasmvmtypes.EventAttribute{
+						{Key: "recipient", Value: "cosmos1bankrecipientxxxxxxxxxxxxxxxxxxxxxxxx"},
+						{Key: "sender", Value: "cosmos1banksenderxxxxxxxxxxxxxxxxxxxxxxxxxx"},
+						{Key: "amount", Value: "1000000000000000000utoken"},
+					},
+				}),
+				Data:         replyWithBank.Result.Ok.Data,
+				MsgResponses: replyWithBank.Result.Ok.MsgResponses,
+			},
+		},
+	}
+	assert.Greater(t, gasReg.ReplyCosts(true, inflated), gasReg.ReplyCosts(true, replyWithBank))
 }
 
 type mockReplyer struct {

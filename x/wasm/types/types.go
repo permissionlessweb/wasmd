@@ -17,6 +17,9 @@ import (
 )
 
 const (
+	// defaultMemoryCacheSize is the per-VM LRU wasm module cache (MiB). Frozen at 100:
+	// x/wasm and 08-wasm each get this, so 100 ≈ 200 MiB resident. LRU is node-local
+	// and must stay gas-neutral; do not add a process-local hottest-N pin.
 	defaultMemoryCacheSize    uint32 = 100 // in MiB
 	defaultSmartQueryGasLimit uint64 = 3_000_000
 	defaultContractDebugMode         = false

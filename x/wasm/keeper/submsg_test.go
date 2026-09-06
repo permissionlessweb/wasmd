@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 
 	wasmvm "github.com/CosmWasm/wasmvm/v3"
@@ -213,16 +214,20 @@ func TestDispatchSubMsgErrorHandling(t *testing.T) {
 	}
 
 	assertGotContractAddr := func(t *testing.T, ctx sdk.Context, contract, emptyAccount string, response wasmvmtypes.SubMsgResult) {
-		// should get the events emitted on new contract
-		event := response.Ok.Events[0]
-		require.Equal(t, event.Type, "instantiate")
-		assert.Equal(t, event.Attributes[0].Key, "_contract_address")
-		eventAddr := event.Attributes[0].Value
-		assert.NotEqual(t, contract, eventAddr)
-
+		// Address is in protobuf data; instantiate system events are not in the reply payload.
 		var res types.MsgInstantiateContractResponse
 		keepers.EncodingConfig.Codec.MustUnmarshal(response.Ok.Data, &res)
-		assert.Equal(t, eventAddr, res.Address)
+		assert.NotEmpty(t, res.Address)
+		assert.NotEqual(t, contract, res.Address)
+		for _, event := range response.Ok.Events {
+			assert.True(t, event.Type == types.WasmModuleEventType || strings.HasPrefix(event.Type, types.CustomContractEventPrefix), event.Type)
+			assert.NotEqual(t, types.EventTypeInstantiate, event.Type)
+			for _, attr := range event.Attributes {
+				if attr.Key == types.AttributeKeyContractAddr {
+					assert.Equal(t, res.Address, attr.Value)
+				}
+			}
+		}
 	}
 
 	cases := map[string]struct {
@@ -282,9 +287,11 @@ func TestDispatchSubMsgErrorHandling(t *testing.T) {
 			resultAssertions: []assertion{assertGasUsed(subGasLimit+75_000, subGasLimit+77_000), assertErrorString("codespace: sdk, code: 11")},
 		},
 		"instantiate contract gets address in data and events": {
-			submsgID:         21,
-			msg:              instantiateContract,
-			resultAssertions: []assertion{assertReturnedEvents(1), assertGotContractAddr},
+			submsgID: 21,
+			msg:      instantiateContract,
+			resultAssertions: []assertion{
+				assertGotContractAddr,
+			},
 		},
 	}
 	for name, tc := range cases {

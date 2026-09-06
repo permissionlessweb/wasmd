@@ -1223,6 +1223,10 @@ func (k Keeper) instantiate(
 	if res.Err != "" {
 		return nil, nil, types.MarkErrorDeterministic(errorsmod.Wrap(types.ErrInstantiateFailed, res.Err))
 	}
+	if res.Ok == nil {
+		// If this gets executed, that's a bug in wasmvm or a malformed contract result
+		return nil, nil, errorsmod.Wrap(types.ErrVMError, "internal wasmvm error: nil ok response")
+	}
 
 	// persist instance first
 	createdAt := types.NewAbsoluteTxPosition(sdkCtx)
@@ -1309,9 +1313,12 @@ func (k Keeper) execute(ctx context.Context, contractAddress, caller sdk.AccAddr
 		// If this gets executed, that's a bug in wasmvm
 		return nil, errorsmod.Wrap(types.ErrVMError, "internal wasmvm error")
 	}
-	fmt.Printf("res: %v\n", res)
 	if res.Err != "" {
 		return nil, types.MarkErrorDeterministic(errorsmod.Wrap(types.ErrExecuteFailed, res.Err))
+	}
+	if res.Ok == nil {
+		// If this gets executed, that's a bug in wasmvm or a malformed contract result
+		return nil, errorsmod.Wrap(types.ErrVMError, "internal wasmvm error: nil ok response")
 	}
 
 	sdkCtx.EventManager().EmitEvent(sdk.NewEvent(
@@ -1479,6 +1486,10 @@ func (k Keeper) callMigrateEntrypoint(
 	if res.Err != "" {
 		return nil, types.MarkErrorDeterministic(errorsmod.Wrap(types.ErrMigrationFailed, res.Err))
 	}
+	if res.Ok == nil {
+		// If this gets executed, that's a bug in wasmvm or a malformed contract result
+		return nil, errorsmod.Wrap(types.ErrVMError, "internal wasmvm error: nil ok response")
+	}
 	return res.Ok, nil
 }
 
@@ -1519,6 +1530,10 @@ func (k Keeper) Sudo(ctx context.Context, contractAddress sdk.AccAddress, msg []
 	}
 	if res.Err != "" {
 		return nil, types.MarkErrorDeterministic(errorsmod.Wrap(types.ErrExecuteFailed, res.Err))
+	}
+	if res.Ok == nil {
+		// If this gets executed, that's a bug in wasmvm or a malformed contract result
+		return nil, errorsmod.Wrap(types.ErrVMError, "internal wasmvm error: nil ok response")
 	}
 
 	sdkCtx.EventManager().EmitEvent(sdk.NewEvent(
@@ -1562,6 +1577,10 @@ func (k Keeper) reply(ctx sdk.Context, contractAddress sdk.AccAddress, reply was
 	}
 	if res.Err != "" {
 		return nil, types.MarkErrorDeterministic(errorsmod.Wrap(types.ErrExecuteFailed, res.Err))
+	}
+	if res.Ok == nil {
+		// If this gets executed, that's a bug in wasmvm or a malformed contract result
+		return nil, errorsmod.Wrap(types.ErrVMError, "internal wasmvm error: nil ok response")
 	}
 
 	ctx.EventManager().EmitEvent(sdk.NewEvent(
@@ -2400,7 +2419,10 @@ func (k Keeper) InitalizedPinnedCodesAndCircuits(ctx context.Context) error {
 	return nil
 }
 
-// InitializePinnedCodes updates wasmvm to pin to cache all contracts marked as pinned
+// InitializePinnedCodes updates wasmvm to pin to cache all contracts marked as pinned.
+// Pinned cache (SyncPinnedCodes) is unbounded: pin <10 hot codeIDs via gov MsgPinCodes
+// (HashMerchant callbacks, cw-hooks listeners, CosmWasm authenticators). Pinning 100s OOMs.
+// Watch size_pinned_memory_cache via get_pinned_metrics. No EndBlocker / auto-pin.
 func (k Keeper) InitializePinnedCodes(ctx context.Context) error {
 	store := prefix.NewStore(runtime.KVStoreAdapter(k.storeService.OpenKVStore(ctx)), types.PinnedCodeIndexPrefix)
 	iter := store.Iterator(nil, nil)
