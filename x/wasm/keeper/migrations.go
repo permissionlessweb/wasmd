@@ -39,3 +39,11 @@ func (m Migrator) Migrate2to3(ctx sdk.Context) error {
 func (m Migrator) Migrate3to4(ctx sdk.Context) error {
 	return v3.NewMigrator(m.keeper, m.keeper.mustStoreCodeInfo).Migrate3to4(ctx, m.keeper.storeService, m.keeper.cdc)
 }
+
+// Migrate4to5 bumps consensus 4 → 5 (circuit epoch settle + optional
+// circuit_dev_destination). Existing params unmarshal with empty dest
+// (keeps circuit_dev_pool). No store rewrite.
+func (m Migrator) Migrate4to5(ctx sdk.Context) error {
+	ctx.Logger().Info("x/wasm: migrate 4→5 (circuit epoch / circuit_dev_destination defaults)")
+	return nil
+}
