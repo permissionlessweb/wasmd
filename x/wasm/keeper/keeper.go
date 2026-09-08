@@ -1107,6 +1107,10 @@ func (k Keeper) instantiate(
 	if res.Err != "" {
 		return nil, nil, types.MarkErrorDeterministic(errorsmod.Wrap(types.ErrInstantiateFailed, res.Err))
 	}
+	if res.Ok == nil {
+		// If this gets executed, that's a bug in wasmvm or a malformed contract result
+		return nil, nil, errorsmod.Wrap(types.ErrVMError, "internal wasmvm error: nil ok response")
+	}
 
 	// persist instance first
 	createdAt := types.NewAbsoluteTxPosition(sdkCtx)
@@ -1193,9 +1197,12 @@ func (k Keeper) execute(ctx context.Context, contractAddress, caller sdk.AccAddr
 		// If this gets executed, that's a bug in wasmvm
 		return nil, errorsmod.Wrap(types.ErrVMError, "internal wasmvm error")
 	}
-	fmt.Printf("res: %v\n", res)
 	if res.Err != "" {
 		return nil, types.MarkErrorDeterministic(errorsmod.Wrap(types.ErrExecuteFailed, res.Err))
+	}
+	if res.Ok == nil {
+		// If this gets executed, that's a bug in wasmvm or a malformed contract result
+		return nil, errorsmod.Wrap(types.ErrVMError, "internal wasmvm error: nil ok response")
 	}
 
 	sdkCtx.EventManager().EmitEvent(sdk.NewEvent(
@@ -1363,6 +1370,10 @@ func (k Keeper) callMigrateEntrypoint(
 	if res.Err != "" {
 		return nil, types.MarkErrorDeterministic(errorsmod.Wrap(types.ErrMigrationFailed, res.Err))
 	}
+	if res.Ok == nil {
+		// If this gets executed, that's a bug in wasmvm or a malformed contract result
+		return nil, errorsmod.Wrap(types.ErrVMError, "internal wasmvm error: nil ok response")
+	}
 	return res.Ok, nil
 }
 
@@ -1403,6 +1414,10 @@ func (k Keeper) Sudo(ctx context.Context, contractAddress sdk.AccAddress, msg []
 	}
 	if res.Err != "" {
 		return nil, types.MarkErrorDeterministic(errorsmod.Wrap(types.ErrExecuteFailed, res.Err))
+	}
+	if res.Ok == nil {
+		// If this gets executed, that's a bug in wasmvm or a malformed contract result
+		return nil, errorsmod.Wrap(types.ErrVMError, "internal wasmvm error: nil ok response")
 	}
 
 	sdkCtx.EventManager().EmitEvent(sdk.NewEvent(
@@ -1446,6 +1461,10 @@ func (k Keeper) reply(ctx sdk.Context, contractAddress sdk.AccAddress, reply was
 	}
 	if res.Err != "" {
 		return nil, types.MarkErrorDeterministic(errorsmod.Wrap(types.ErrExecuteFailed, res.Err))
+	}
+	if res.Ok == nil {
+		// If this gets executed, that's a bug in wasmvm or a malformed contract result
+		return nil, errorsmod.Wrap(types.ErrVMError, "internal wasmvm error: nil ok response")
 	}
 
 	ctx.EventManager().EmitEvent(sdk.NewEvent(
@@ -2189,7 +2208,6 @@ func (k Keeper) IsPinnedCircuit(ctx context.Context, zkID uint64) bool {
 	}
 	return ok
 }
-
 
 // collectPinnedChecksums collects checksums for all pinned codes, optionally excluding one
 func (k Keeper) collectPinnedChecksums(ctx context.Context, excludeCodeID *uint64) ([]wasmvm.Checksum, error) {

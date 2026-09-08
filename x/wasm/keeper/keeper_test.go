@@ -1729,6 +1729,68 @@ func TestSudo(t *testing.T) {
 	assert.Equal(t, expEvt, em.Events()[0])
 }
 
+func TestNilOkEmptyErrReturnsVMError(t *testing.T) {
+	nilOkResult := func() *wasmvmtypes.ContractResult {
+		return &wasmvmtypes.ContractResult{Ok: nil, Err: ""}
+	}
+
+	t.Run("execute", func(t *testing.T) {
+		mock := &wasmtesting.MockWasmEngine{}
+		wasmtesting.MakeInstantiable(mock)
+		ctx, keepers := CreateTestInput(t, false, AvailableCapabilities, WithWasmEngine(mock))
+		example := SeedNewContractInstance(t, ctx, keepers, mock)
+		mock.ExecuteFn = func(codeID wasmvm.Checksum, env wasmvmtypes.Env, info wasmvmtypes.MessageInfo, executeMsg []byte, store wasmvm.KVStore, goapi wasmvm.GoAPI, querier wasmvm.Querier, gasMeter wasmvm.GasMeter, gasLimit uint64, deserCost wasmvmtypes.UFraction) (*wasmvmtypes.ContractResult, uint64, error) {
+			return nilOkResult(), 0, nil
+		}
+
+		require.NotPanics(t, func() {
+			_, err := keepers.ContractKeeper.Execute(ctx, example.Contract, example.CreatorAddr, []byte(`{}`), nil)
+			require.ErrorIs(t, err, types.ErrVMError)
+			require.Contains(t, err.Error(), "nil ok response")
+		})
+	})
+
+	t.Run("sudo", func(t *testing.T) {
+		mock := &wasmtesting.MockWasmEngine{}
+		wasmtesting.MakeInstantiable(mock)
+		ctx, keepers := CreateTestInput(t, false, AvailableCapabilities, WithWasmEngine(mock))
+		example := SeedNewContractInstance(t, ctx, keepers, mock)
+		mock.SudoFn = func(codeID wasmvm.Checksum, env wasmvmtypes.Env, sudoMsg []byte, store wasmvm.KVStore, goapi wasmvm.GoAPI, querier wasmvm.Querier, gasMeter wasmvm.GasMeter, gasLimit uint64, deserCost wasmvmtypes.UFraction) (*wasmvmtypes.ContractResult, uint64, error) {
+			return nilOkResult(), 0, nil
+		}
+
+		require.NotPanics(t, func() {
+			_, err := keepers.WasmKeeper.Sudo(ctx, example.Contract, []byte(`{}`))
+			require.ErrorIs(t, err, types.ErrVMError)
+			require.Contains(t, err.Error(), "nil ok response")
+		})
+	})
+
+	t.Run("migrate", func(t *testing.T) {
+		mock := &wasmtesting.MockWasmEngine{}
+		wasmtesting.MakeInstantiable(mock)
+		ctx, keepers := CreateTestInput(t, false, AvailableCapabilities, WithWasmEngine(mock))
+		example := SeedNewContractInstance(t, ctx, keepers, mock)
+		newCode := StoreRandomContract(t, ctx, keepers, mock)
+		require.NotEqual(t, example.CodeID, newCode.CodeID)
+
+		mock.MigrateFn = func(codeID wasmvm.Checksum, env wasmvmtypes.Env, migrateMsg []byte, store wasmvm.KVStore, goapi wasmvm.GoAPI, querier wasmvm.Querier, gasMeter wasmvm.GasMeter, gasLimit uint64, deserCost wasmvmtypes.UFraction) (*wasmvmtypes.ContractResult, uint64, error) {
+			return nilOkResult(), 0, nil
+		}
+		mock.MigrateWithInfoFn = func(codeID wasmvm.Checksum, env wasmvmtypes.Env, migrateMsg []byte, migrateInfo wasmvmtypes.MigrateInfo, store wasmvm.KVStore, goapi wasmvm.GoAPI, querier wasmvm.Querier, gasMeter wasmvm.GasMeter, gasLimit uint64, deserCost wasmvmtypes.UFraction) (*wasmvmtypes.ContractResult, uint64, error) {
+			return nilOkResult(), 0, nil
+		}
+
+		oldCodeID := keepers.WasmKeeper.GetContractInfo(ctx, example.Contract).CodeID
+		require.NotPanics(t, func() {
+			_, err := keepers.ContractKeeper.Migrate(ctx, example.Contract, example.CreatorAddr, newCode.CodeID, []byte(`{}`))
+			require.ErrorIs(t, err, types.ErrVMError)
+			require.Contains(t, err.Error(), "nil ok response")
+		})
+		require.Equal(t, oldCodeID, keepers.WasmKeeper.GetContractInfo(ctx, example.Contract).CodeID)
+	})
+}
+
 func prettyEvents(t *testing.T, events sdk.Events) string {
 	t.Helper()
 	type prettyEvent struct {
