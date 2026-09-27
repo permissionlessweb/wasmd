@@ -20,5 +20,13 @@ func BuiltInCapabilities() []string {
 		"cosmwasm_2_2",
 		"ibc2",
 		"bulk_memory",
+		// BN254 is the BN256 / alt_bn128 host (bn254_add, bn254_scalar_mul, bn254_pairing_equality).
+		"bn254",
+		// BLAKE2b-256 and BLAKE3-256 (blake2b_256, blake3_256).
+		"hash_blake",
+		// Poseidon Pasta (poseidon_hash_pallas, poseidon_hash_vesta) and poseidon377.
+		"hash_poseidon",
+		// RedPallas and RedJubjub spend-auth and binding verify.
+		"redpallas",
 	}
 }
